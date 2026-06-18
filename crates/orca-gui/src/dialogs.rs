@@ -172,9 +172,7 @@ pub fn checksum(parent: Option<&gtk::Window>, title: &str, digest: &str) {
     vbox.append(&compare_entry);
 
     // Match/mismatch status label
-    let status_lbl = gtk::Label::builder()
-        .halign(gtk::Align::Start)
-        .build();
+    let status_lbl = gtk::Label::builder().halign(gtk::Align::Start).build();
     vbox.append(&status_lbl);
 
     {

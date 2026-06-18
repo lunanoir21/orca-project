@@ -258,6 +258,17 @@
 
 "sidebar.network" = "Ağ Konumları"
 
+# Plugin manager
+"plugin.title"        = "Eklenti Yöneticisi"
+"plugin.open_folder"  = "Eklenti Klasörünü Aç"
+"plugin.enabled"      = "Etkin"
+"plugin.disabled"     = "Devre Dışı"
+"plugin.error"        = "Hata"
+"plugin.reload"       = "Yeniden Yükle"
+"plugin.log"          = "Günlük"
+"plugin.no_plugins"   = "Henüz eklenti yok."
+"sidebar.plugins"     = "Eklentiler"
+
 # Generic
 "common.cancel" = "İptal"
 "common.close"  = "Kapat"

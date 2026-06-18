@@ -132,19 +132,12 @@ impl Component for MountManager {
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        msg: Self::Input,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match msg {
             MountManagerInput::Refresh => {
                 sender.oneshot_command(async move {
                     MountManagerCmd::Listed(
-                        orca_core::list_mounts()
-                            .await
-                            .map_err(|e| e.to_string()),
+                        orca_core::list_mounts().await.map_err(|e| e.to_string()),
                     )
                 });
             }
@@ -166,9 +159,7 @@ impl Component for MountManager {
                     let mp = row.volume.mount_point.clone();
                     sender.oneshot_command(async move {
                         MountManagerCmd::OpDone(
-                            orca_core::unmount(&mp)
-                                .await
-                                .map_err(|e| e.to_string()),
+                            orca_core::unmount(&mp).await.map_err(|e| e.to_string()),
                         )
                     });
                 }
@@ -178,9 +169,7 @@ impl Component for MountManager {
                     let device = row.volume.device.clone();
                     sender.oneshot_command(async move {
                         MountManagerCmd::OpDone(
-                            orca_core::eject(&device)
-                                .await
-                                .map_err(|e| e.to_string()),
+                            orca_core::eject(&device).await.map_err(|e| e.to_string()),
                         )
                     });
                 }
@@ -203,8 +192,7 @@ impl Component for MountManager {
                 self.volumes.clear();
 
                 for (idx, vol) in volumes.into_iter().enumerate() {
-                    let (row, mount_btn, unmount_btn, eject_btn) =
-                        build_row(&vol, idx, &sender);
+                    let (row, mount_btn, unmount_btn, eject_btn) = build_row(&vol, idx, &sender);
                     self.list_box.append(&row);
                     self.volumes.push(VolumeRow {
                         volume: vol,

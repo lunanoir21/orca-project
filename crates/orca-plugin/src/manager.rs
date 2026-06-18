@@ -121,6 +121,23 @@ impl PluginManager {
         self.disabled.iter().cloned().collect()
     }
 
+    /// Collect all context-menu items registered by enabled plugins.
+    ///
+    /// Returns `(action_id, label)` pairs for use in `PaneInput::SetPluginContextItems`.
+    #[must_use]
+    pub fn context_items(&self) -> Vec<(String, String)> {
+        let mut items = Vec::new();
+        for p in &self.plugins {
+            if p.plugin_state != PluginState::Enabled {
+                continue;
+            }
+            for item in &p.state.borrow().context_items {
+                items.push((p.meta.id.clone() + "::" + &item.label, item.label.clone()));
+            }
+        }
+        items
+    }
+
     // ---- event dispatch ----
 
     /// Fire `on_file_select(path)` across all enabled plugins.
@@ -194,8 +211,7 @@ impl PluginManager {
                 .push(format!("[error] {msg}"));
             if matches!(
                 &err,
-                PluginError::Timeout
-                    | PluginError::Lua(mlua::Error::MemoryError(_))
+                PluginError::Timeout | PluginError::Lua(mlua::Error::MemoryError(_))
             ) {
                 self.plugins[idx].plugin_state = PluginState::Error(msg);
             }

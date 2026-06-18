@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Orca
+Name[tr]=Orca
+Comment=Full-featured Linux file manager
+Comment[tr]=Tam özellikli Linux dosya yöneticisi
+Exec=orca-gui %U
+Icon=io.github.lunanoir21.orca
+Terminal=false
+Type=Application
+Categories=System;FileManager;GTK;
+MimeType=inode/directory;
+Keywords=file;manager;files;vault;encrypt;
+StartupNotify=true
+StartupWMClass=orca

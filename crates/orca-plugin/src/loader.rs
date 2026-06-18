@@ -103,7 +103,10 @@ pub fn load_plugin(path: &Path, badge_map: Arc<Mutex<BadgeMap>>) -> LoadedPlugin
     }
 }
 
-fn try_load_plugin(path: &Path, badge_map: Arc<Mutex<BadgeMap>>) -> Result<LoadedPlugin, PluginError> {
+fn try_load_plugin(
+    path: &Path,
+    badge_map: Arc<Mutex<BadgeMap>>,
+) -> Result<LoadedPlugin, PluginError> {
     let source = std::fs::read_to_string(path)?;
     let meta = parse_meta(path, &source)?;
     let lua = create_sandbox()?;
@@ -140,11 +143,7 @@ pub fn discover(dir: &Path) -> Vec<PathBuf> {
     };
     let mut paths: Vec<PathBuf> = entries
         .flatten()
-        .filter(|e| {
-            e.path()
-                .extension()
-                .is_some_and(|ext| ext == "lua")
-        })
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "lua"))
         .map(|e| e.path())
         .collect();
     paths.sort();

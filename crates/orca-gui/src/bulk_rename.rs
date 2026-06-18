@@ -266,8 +266,7 @@ impl Component for BulkRenameDialog {
                 let rule = self.rule.clone();
                 sender.oneshot_command(async move {
                     let result = relm4::spawn_blocking(move || {
-                        orca_core::preview_rename(&paths, &rule)
-                            .map_err(|e| e.to_string())
+                        orca_core::preview_rename(&paths, &rule).map_err(|e| e.to_string())
                     })
                     .await
                     .unwrap_or_else(|e| Err(e.to_string()));
@@ -370,9 +369,7 @@ impl BulkRenameDialog {
                     RenameConflict::DuplicateTarget => "!dup",
                     RenameConflict::TargetExists => "!exists",
                 };
-                let badge = gtk::Label::builder()
-                    .label(tag)
-                    .build();
+                let badge = gtk::Label::builder().label(tag).build();
                 badge.add_css_class("error");
                 inner.append(&old_lbl);
                 inner.append(&arrow);

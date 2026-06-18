@@ -160,13 +160,50 @@ fn lock(sess: &Arc<Mutex<Session>>) -> Result<std::sync::MutexGuard<'_, Session>
         .map_err(|_| OrcaError::Other("sftp session mutex poisoned".to_string()))
 }
 
-/// Blocking connect + handshake + authentication.
+/// Blocking connect + handshake + host-key verification + authentication.
+///
+/// Host key is checked against `~/.ssh/known_hosts`. Unknown hosts are rejected
+/// to prevent MITM attacks; callers should surface the error to the user with a
+/// prompt to add the host manually (outside Orca scope — use `ssh` once to accept).
 fn connect_blocking(host: &str, port: u16, username: &str, auth: &SftpAuth) -> Result<SftpClient> {
     let tcp =
         TcpStream::connect((host, port)).map_err(|e| OrcaError::from_io(Path::new(host), e))?;
     let mut sess = Session::new().map_err(map_ssh)?;
     sess.set_tcp_stream(tcp);
     sess.handshake().map_err(map_ssh)?;
+
+    // --- Host key verification (MITM guard) ---
+    // Load the user's known_hosts file and verify the server's key.
+    let mut known_hosts = sess.known_hosts().map_err(map_ssh)?;
+    if let Some(kh_path) = dirs::home_dir().map(|h| h.join(".ssh/known_hosts")) {
+        if kh_path.exists() {
+            known_hosts
+                .read_file(&kh_path, ssh2::KnownHostFileKind::OpenSSH)
+                .map_err(map_ssh)?;
+        }
+    }
+    let (key, key_type) = sess
+        .host_key()
+        .ok_or_else(|| OrcaError::Other("sftp: server sent no host key".into()))?;
+    match known_hosts.check_port(host, port, key) {
+        ssh2::CheckResult::Match => {}
+        ssh2::CheckResult::NotFound => {
+            return Err(OrcaError::Other(format!(
+                "sftp: unknown host key for {host}:{port} (key type: {key_type:?}). \
+                 Accept the host key once via `ssh {host}` and retry."
+            )));
+        }
+        ssh2::CheckResult::Mismatch => {
+            return Err(OrcaError::Other(format!(
+                "sftp: host key MISMATCH for {host}:{port} — possible MITM attack! \
+                 If the host key legitimately changed, remove the stale entry from \
+                 ~/.ssh/known_hosts."
+            )));
+        }
+        ssh2::CheckResult::Failure => {
+            return Err(OrcaError::Other("sftp: known_hosts check failed".into()));
+        }
+    }
 
     match auth {
         SftpAuth::Password(password) => {

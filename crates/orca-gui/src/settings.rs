@@ -473,9 +473,7 @@ fn keybinds_grid(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) ->
             .build();
         grid.attach(&binding_lbl, 1, row as i32, 1, 1);
 
-        let btn = gtk::Button::builder()
-            .label(i18n::t("set.rebind"))
-            .build();
+        let btn = gtk::Button::builder().label(i18n::t("set.rebind")).build();
         {
             let sender = sender.clone();
             let lbl_ref = binding_lbl.clone();
@@ -590,9 +588,7 @@ fn terminal_shell_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage
     let sender = sender.clone();
     entry.connect_changed(move |e| {
         sender
-            .output(SettingsOutput::SetTerminalShell(
-                e.text().to_string(),
-            ))
+            .output(SettingsOutput::SetTerminalShell(e.text().to_string()))
             .ok();
     });
     row.append(&entry);

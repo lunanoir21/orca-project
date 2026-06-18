@@ -386,7 +386,9 @@ pub async fn set_owner(path: impl AsRef<Path>, uid: u32, gid: u32) -> Result<()>
     #[cfg(not(unix))]
     {
         let _ = (path, uid, gid);
-        Err(OrcaError::Other("chown unsupported on this platform".into()))
+        Err(OrcaError::Other(
+            "chown unsupported on this platform".into(),
+        ))
     }
 }
 

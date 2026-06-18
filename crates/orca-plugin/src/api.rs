@@ -115,29 +115,26 @@ pub fn register_api(
     // orca.add_context_item(label, fn)
     {
         let st = state.clone();
-        let f = lua.create_function(
-            move |lua, (label, func): (String, mlua::Function)| {
-                let func_key = lua.create_registry_value(func)?;
-                st.borrow_mut().context_items.push(ContextItem {
-                    label,
-                    func_key,
-                });
-                Ok(())
-            },
-        )?;
+        let f = lua.create_function(move |lua, (label, func): (String, mlua::Function)| {
+            let func_key = lua.create_registry_value(func)?;
+            st.borrow_mut()
+                .context_items
+                .push(ContextItem { label, func_key });
+            Ok(())
+        })?;
         orca.set("add_context_item", f)?;
     }
 
     // orca.set_badge(path, text, color)
     {
         let bm = badge_map.clone();
-        let f = lua.create_function(
-            move |_, (path, text, color): (String, String, String)| {
-                let mut map = bm.lock().unwrap();
-                map.insert(PathBuf::from(&path), Badge { text, color });
-                Ok(())
-            },
-        )?;
+        let f = lua.create_function(move |_, (path, text, color): (String, String, String)| {
+            let mut map = bm
+                .lock()
+                .map_err(|_| mlua::Error::RuntimeError("badge_map mutex poisoned".into()))?;
+            map.insert(PathBuf::from(&path), Badge { text, color });
+            Ok(())
+        })?;
         orca.set("set_badge", f)?;
     }
 
@@ -165,9 +162,7 @@ pub fn register_api(
     // orca.open(path)
     {
         let f = lua.create_function(move |_, path: String| {
-            let _ = std::process::Command::new("xdg-open")
-                .arg(&path)
-                .spawn();
+            let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
             Ok(())
         })?;
         orca.set("open", f)?;
@@ -194,9 +189,7 @@ fn exec_with_timeout(cmd: &str, timeout: Duration) -> Result<String, crate::erro
     let (tx, rx) = std::sync::mpsc::channel();
     let cmd = cmd.to_owned();
     std::thread::spawn(move || {
-        let result = std::process::Command::new("sh")
-            .args(["-c", &cmd])
-            .output();
+        let result = std::process::Command::new("sh").args(["-c", &cmd]).output();
         let _ = tx.send(result);
     });
     match rx.recv_timeout(timeout) {
@@ -295,18 +288,21 @@ mod tests {
         let badges = Arc::new(Mutex::new(BadgeMap::default()));
         register_api(&lua, state.clone(), badges, "test".into()).unwrap();
 
-        lua.load(r#"
+        lua.load(
+            r#"
             orca.on_dir_change(function(path)
                 orca.log("dir=" .. path)
             end)
-        "#)
+        "#,
+        )
         .exec()
         .unwrap();
 
-        let key = state.borrow().on_dir_change.as_ref().map(|k| {
-            lua.registry_value::<mlua::Function>(k)
-                .is_ok()
-        });
+        let key = state
+            .borrow()
+            .on_dir_change
+            .as_ref()
+            .map(|k| lua.registry_value::<mlua::Function>(k).is_ok());
         assert_eq!(key, Some(true));
     }
 

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.lunanoir21.orca</id>
+  <name>Orca</name>
+  <summary>Full-featured, security-focused Linux file manager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <description>
+    <p>
+      Orca is a production-grade Linux file manager built with Rust and GTK4.
+      It provides a dual-pane browser with tabs, an integrated encrypted vault
+      system, a sandboxed Lua plugin API, and deep customization via TOML config
+      and CSS themes.
+    </p>
+    <ul>
+      <li>Dual-pane browser with tabs and three view modes (list, icon, detail)</li>
+      <li>Encrypted vaults: age encryption, Argon2id key derivation, auto-lock</li>
+      <li>Ripgrep-backed content search with glob and regex support</li>
+      <li>Archive support: zip, tar.gz, tar.xz, tar.bz2</li>
+      <li>Git status badges, disk usage visualizer, mount manager</li>
+      <li>SFTP/FTP network locations with keyring-backed credentials</li>
+      <li>Embedded terminal synced to the active directory</li>
+      <li>Sandboxed Lua 5.4 plugin API with hot-reload</li>
+      <li>CSS themes with live switching</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.lunanoir21.orca.desktop</launchable>
+
+  <url type="homepage">https://github.com/lunanoir21/orca</url>
+  <url type="bugtracker">https://github.com/lunanoir21/orca/issues</url>
+
+  <developer id="io.github.lunanoir21">
+    <name>lunanoir21</name>
+  </developer>
+
+  <releases>
+    <release version="0.1.0" date="2026-06-18">
+      <description>
+        <p>Initial release of Orca.</p>
+      </description>
+    </release>
+  </releases>
+
+  <content_rating type="oars-1.1"/>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">800</display_length>
+  </requires>
+</component>

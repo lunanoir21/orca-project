@@ -205,7 +205,16 @@ impl RelmColumn for NameColumn {
         });
         root.add_controller(drag);
 
-        (root, NameWidgets { icon, label, git_badge, plugin_badge_lbl, state })
+        (
+            root,
+            NameWidgets {
+                icon,
+                label,
+                git_badge,
+                plugin_badge_lbl,
+                state,
+            },
+        )
     }
 
     fn bind(item: &mut Self::Item, widgets: &mut Self::Widgets, _root: &mut Self::Root) {
@@ -421,7 +430,16 @@ impl RelmGridItem for FileItem {
         });
         root.add_controller(drag);
 
-        (root, GridWidgets { icon, label, git_badge, plugin_badge_lbl, state })
+        (
+            root,
+            GridWidgets {
+                icon,
+                label,
+                git_badge,
+                plugin_badge_lbl,
+                state,
+            },
+        )
     }
 
     fn bind(&mut self, widgets: &mut Self::Widgets, _root: &mut Self::Root) {
@@ -456,15 +474,22 @@ impl RelmGridItem for FileItem {
 /// The label is shown with a short letter and color class for notable statuses,
 /// and hidden for `Unmodified`, `Ignored`, and `None`.
 fn apply_git_badge(badge: &gtk::Label, status: Option<GitStatus>) {
-    for cls in &["git-modified", "git-added", "git-deleted", "git-renamed", "git-untracked", "git-conflicted"] {
+    for cls in &[
+        "git-modified",
+        "git-added",
+        "git-deleted",
+        "git-renamed",
+        "git-untracked",
+        "git-conflicted",
+    ] {
         badge.remove_css_class(cls);
     }
     let (text, css) = match status {
-        Some(GitStatus::Modified)   => ("M", "git-modified"),
-        Some(GitStatus::Added)      => ("A", "git-added"),
-        Some(GitStatus::Deleted)    => ("D", "git-deleted"),
-        Some(GitStatus::Renamed)    => ("R", "git-renamed"),
-        Some(GitStatus::Untracked)  => ("?", "git-untracked"),
+        Some(GitStatus::Modified) => ("M", "git-modified"),
+        Some(GitStatus::Added) => ("A", "git-added"),
+        Some(GitStatus::Deleted) => ("D", "git-deleted"),
+        Some(GitStatus::Renamed) => ("R", "git-renamed"),
+        Some(GitStatus::Untracked) => ("?", "git-untracked"),
         Some(GitStatus::Conflicted) => ("!", "git-conflicted"),
         _ => {
             badge.set_visible(false);

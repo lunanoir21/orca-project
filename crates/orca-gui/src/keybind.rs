@@ -232,14 +232,20 @@ impl ActionMap {
                 | gdk::ModifierType::SUPER_MASK);
         // Try both the keyval as-is and its lowercase equivalent, so Ctrl+T and
         // Ctrl+t from the config both match regardless of Shift state.
-        let combo = KeyCombo { mods: clean_mods, key };
+        let combo = KeyCombo {
+            mods: clean_mods,
+            key,
+        };
         if let Some(a) = self.reverse.get(&combo) {
             return Some(*a);
         }
         // Try lowercase variant (for letter keys where Shift may send uppercase).
         let lower = key.to_lower();
         if lower != key {
-            let combo_lower = KeyCombo { mods: clean_mods, key: lower };
+            let combo_lower = KeyCombo {
+                mods: clean_mods,
+                key: lower,
+            };
             if let Some(a) = self.reverse.get(&combo_lower) {
                 return Some(*a);
             }

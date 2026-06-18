@@ -1,0 +1,61 @@
+# Maintainer: lunanoir21 <anilbektas541@gmail.com>
+pkgname=orca-files
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Full-featured, security-focused Linux file manager written in Rust"
+arch=('x86_64')
+url="https://github.com/lunanoir21/orca"
+license=('GPL-3.0-only')
+depends=(
+    'gtk4'
+    'libssh2'
+    'openssl'
+    'dbus'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'pkg-config'
+)
+source=("$pkgname-$pkgver.tar.gz::https://github.com/lunanoir21/orca/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "orca-$pkgver"
+    cargo build --release --locked
+}
+
+package() {
+    cd "orca-$pkgver"
+
+    # Binary
+    install -Dm755 "target/release/orca-gui" "$pkgdir/usr/bin/orca-gui"
+
+    # Desktop entry
+    install -Dm644 "packaging/orca.desktop" \
+        "$pkgdir/usr/share/applications/io.github.lunanoir21.orca.desktop"
+
+    # AppStream metadata
+    install -Dm644 "packaging/io.github.lunanoir21.orca.metainfo.xml" \
+        "$pkgdir/usr/share/metainfo/io.github.lunanoir21.orca.metainfo.xml"
+
+    # Man page
+    install -Dm644 "docs/orca.1" "$pkgdir/usr/share/man/man1/orca.1"
+
+    # Built-in plugins
+    install -dm755 "$pkgdir/usr/share/orca/plugins"
+    install -Dm644 plugins/*.lua "$pkgdir/usr/share/orca/plugins/"
+
+    # Built-in themes
+    install -dm755 "$pkgdir/usr/share/orca/themes"
+    install -Dm644 themes/*.css "$pkgdir/usr/share/orca/themes/"
+
+    # Default config
+    install -Dm644 "config/default.toml" "$pkgdir/usr/share/orca/default.toml"
+
+    # Documentation
+    install -dm755 "$pkgdir/usr/share/doc/orca"
+    install -Dm644 README.md CHANGELOG.md SECURITY.md docs/plugins.md docs/themes.md \
+        "$pkgdir/usr/share/doc/orca/"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

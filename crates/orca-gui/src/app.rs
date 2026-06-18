@@ -22,19 +22,19 @@ use orca_core::FileEntry;
 use orca_vault::VaultManager;
 
 use crate::archive_view::ArchiveView;
-use crate::disk_usage::{DiskUsageDialog, DiskUsageOutput};
-use crate::mount_manager::MountManager;
-use crate::network::NetworkBrowser;
 use crate::bulk_rename::{BulkRenameDialog, BulkRenameOutput};
 use crate::config::Config;
-use crate::keybind::{Action, ActionMap};
-use crate::permissions::{PermissionsDialog, PermissionsInit};
 use crate::dialogs;
+use crate::disk_usage::{DiskUsageDialog, DiskUsageOutput};
 use crate::format;
 use crate::home::{HomeInput, HomeOutput, HomePage};
 use crate::i18n::{self, Lang};
+use crate::keybind::{Action, ActionMap};
+use crate::mount_manager::MountManager;
 use crate::nav::{NavBar, NavInput, NavOutput};
+use crate::network::NetworkBrowser;
 use crate::pane::{PaneInput, PaneOutput, ViewMode};
+use crate::permissions::{PermissionsDialog, PermissionsInit};
 use crate::places;
 use crate::preview::{PreviewInput, PreviewPanel};
 use crate::properties::Properties;
@@ -167,6 +167,8 @@ pub struct AppModel {
     disk_usage: Option<Controller<DiskUsageDialog>>,
     /// The currently-open network browser dialog, kept alive while shown.
     network_browser: Option<Controller<NetworkBrowser>>,
+    /// The currently-open plugin manager dialog, kept alive while shown.
+    plugin_manager_ui: Option<Controller<crate::plugin_manager_ui::PluginManagerDialog>>,
     /// Active scroll-sync binding between the two panes, when enabled.
     sync_binding: Option<gtk::glib::Binding>,
     /// Parsed keybind → action lookup table (shared with the key handler closure).
@@ -321,6 +323,13 @@ pub enum AppMsg {
     ResetDefaults,
     /// Config file changed on disk; reload and apply.
     ReloadConfig,
+    /// A plugin context item / action was activated; forward to plugin manager.
+    FirePluginAction {
+        action_id: String,
+        paths: Vec<PathBuf>,
+    },
+    /// Open the plugin manager dialog.
+    OpenPluginManager,
 }
 
 #[relm4::component(pub)]
@@ -427,7 +436,11 @@ impl Component for AppModel {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let AppInit { paths, config, builtin_plugins } = init;
+        let AppInit {
+            paths,
+            config,
+            builtin_plugins,
+        } = init;
 
         // CSS must be loaded after GTK is up (a display exists by init time).
         crate::theme::load(&paths.themes);
@@ -558,7 +571,9 @@ impl Component for AppModel {
 
         // Vault panel section (persistent; not cleared with bookmarks).
         let vault_panel = VaultPanel::builder()
-            .launch(VaultPanelInit { mgr: vault_mgr.clone() })
+            .launch(VaultPanelInit {
+                mgr: vault_mgr.clone(),
+            })
             .forward(sender.input_sender(), |out| match out {
                 VaultPanelOutput::Navigate(p) => AppMsg::VaultNavigate(p),
                 VaultPanelOutput::AutoLocked(n) => AppMsg::VaultAutoLocked(n),
@@ -611,6 +626,7 @@ impl Component for AppModel {
             mount_manager: None,
             disk_usage: None,
             network_browser: None,
+            plugin_manager_ui: None,
             sync_binding: None,
             action_map,
             plugin_mgr,
@@ -721,9 +737,10 @@ impl Component for AppModel {
             AppMsg::SetLanguage(lang) => self.set_language(lang),
             AppMsg::DirChanged(idx, path) => {
                 self.state[idx].dir = path.clone();
-                // Fire plugin hook on dir change and push updated badges to both panes.
+                // Fire plugin hook on dir change and push updated badges/items to both panes.
                 self.plugin_mgr.fire_dir_change(&path);
                 self.push_plugin_badges();
+                self.push_plugin_context_items();
                 if idx == self.active {
                     self.current_path = path.to_string_lossy().into_owned();
                     self.nav.emit(NavInput::SetPath(path.clone()));
@@ -849,11 +866,12 @@ impl Component for AppModel {
             }
             AppMsg::OpenDiskUsage(path) => {
                 let sender_clone = sender.clone();
-                let ctrl = DiskUsageDialog::builder()
-                    .launch(path)
-                    .forward(sender_clone.input_sender(), |out| match out {
+                let ctrl = DiskUsageDialog::builder().launch(path).forward(
+                    sender_clone.input_sender(),
+                    |out| match out {
                         DiskUsageOutput::Navigate(p) => AppMsg::NavigateTo(p),
-                    });
+                    },
+                );
                 ctrl.widget().present();
                 self.disk_usage = Some(ctrl);
             }
@@ -927,15 +945,14 @@ impl Component for AppModel {
                 self.config = Config::default();
                 self.apply_theme();
                 self.persist();
-                *self.action_map.lock().unwrap() =
-                    ActionMap::from_keybinds(&self.config.keybinds);
+                *self.action_map.lock().unwrap() = ActionMap::from_keybinds(&self.config.keybinds);
             }
             AppMsg::ReloadConfig => {
-                if let Ok(new_cfg) =
-                    std::fs::read_to_string(self.paths.config.join("config.toml"))
-                        .and_then(|t| toml::from_str::<Config>(&t).map_err(|e| {
-                            std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-                        }))
+                if let Ok(new_cfg) = std::fs::read_to_string(self.paths.config.join("config.toml"))
+                    .and_then(|t| {
+                        toml::from_str::<Config>(&t)
+                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                    })
                 {
                     self.config = new_cfg;
                     self.apply_theme();
@@ -943,6 +960,18 @@ impl Component for AppModel {
                         ActionMap::from_keybinds(&self.config.keybinds);
                     tracing::info!("config reloaded from disk");
                 }
+            }
+            AppMsg::FirePluginAction { action_id, paths } => {
+                self.plugin_mgr.fire_action(&action_id, &paths);
+                self.push_plugin_badges();
+                self.push_plugin_context_items();
+            }
+            AppMsg::OpenPluginManager => {
+                let ctrl = crate::plugin_manager_ui::PluginManagerDialog::builder()
+                    .launch(self.plugin_mgr.list())
+                    .detach();
+                ctrl.widget().present();
+                self.plugin_manager_ui = Some(ctrl);
             }
         }
     }
@@ -960,7 +989,21 @@ impl AppModel {
             .collect();
         drop(map);
         for pane in &self.panes {
-            pane.emit(SideInput::Forward(PaneInput::UpdatePluginBadges(badges.clone())));
+            pane.emit(SideInput::Forward(PaneInput::UpdatePluginBadges(
+                badges.clone(),
+            )));
+        }
+    }
+
+    /// Push plugin-registered context items to both pane sides.
+    fn push_plugin_context_items(&self) {
+        use crate::pane::PaneInput;
+        use crate::side::SideInput;
+        let items = self.plugin_mgr.context_items();
+        for pane in &self.panes {
+            pane.emit(SideInput::Forward(PaneInput::SetPluginContextItems(
+                items.clone(),
+            )));
         }
     }
 
@@ -1210,6 +1253,9 @@ fn map_pane(idx: usize, out: PaneOutput) -> AppMsg {
         PaneOutput::ExtractTo(p) => AppMsg::ExtractTo(p),
         PaneOutput::BrowseArchive(p) => AppMsg::BrowseArchive(p),
         PaneOutput::Error(e) => AppMsg::Error(e),
+        PaneOutput::PluginContextItem { action_id, paths } => {
+            AppMsg::FirePluginAction { action_id, paths }
+        }
     }
 }
 
