@@ -1,0 +1,54 @@
+# orca-vault — encryption engine (security-critical).
+#
+# Per project rule 9.1, every crypto dependency here must be pinned to an exact
+# version (no caret ranges) and reviewed against `cargo audit`. Phase 0 ships an
+# empty but compiling crate; crypto deps land in Phase 2 with exact pins.
+
+[package]
+name = "orca-vault"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orca encryption engine: age-based vaults, Argon2id KDF, encrypted index."
+
+[dependencies]
+# Typed error enums (Phase 2.1). Shares the workspace version.
+thiserror = { workspace = true }
+# (De)serialization of VaultConfig (into config.toml) and the VaultIndex
+# (serialized then encrypted by the index module). `derive` for #[derive(...)].
+serde = { workspace = true, features = ["derive"] }
+# Serialize the plaintext vault meta (public KDF params + salt) and the
+# (pre-encryption) VaultIndex. Plaintext meta must be readable before the key
+# exists, so it is stored as TOML, not encrypted.
+toml = { workspace = true }
+
+# --- Cryptography (Phase 2.3+): EXACT version pins per project rule 9.1. ---
+# Argon2id passphrase key derivation (no custom KDF). Pinned exact.
+argon2 = "=0.5.3"
+# Wipe key material from memory on drop (DerivedKey). Pinned exact.
+zeroize = "=1.9.0"
+# OS CSPRNG for vault salts. Pinned exact.
+getrandom = "=0.2.17"
+# `age` file-encryption envelope (default scheme; ChaCha20-Poly1305 + scrypt
+# passphrase). Reference implementation, extensively fuzzed. Pinned exact.
+age = "=0.11.1"
+# XChaCha20-Poly1305 streaming AEAD for the alternative argon2id scheme. The
+# `stream` feature gates `aead::stream`. RustCrypto, audited. Pinned exact.
+chacha20poly1305 = { version = "=0.10.1", features = ["stream"] }
+# Content-integrity hashes stored in the index (selectable Blake3 / SHA-256) and
+# used by integrity verification. Pinned exact.
+blake3 = "=1.8.5"
+sha2 = "=0.10.9"
+# Backup export/import: bundle the vault directory as a tar before sealing.
+tar = "=0.4.46"
+# Auto-lock timer: shared state (sync::Mutex) + async firing loop (time::sleep)
+# that emits a LockEvent over an mpsc channel. Not a crypto dep.
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+# Async runtime + #[tokio::test] for auto-lock timing tests.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time", "sync"] }
+

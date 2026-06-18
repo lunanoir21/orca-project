@@ -1,0 +1,177 @@
+/* Orca structural stylesheet.
+ *
+ * Layout only — paddings, radii, sizes, weights, transitions. *All colors* are
+ * generated at runtime by crate::theme::apply() into a single USER-priority
+ * provider (from the active scheme + accent + background image), so the
+ * appearance can be recolored live without touching this file. Keeping color
+ * out of here also means a user theme override only has to restate colors.
+ *
+ * Loaded at APPLICATION priority so the runtime color provider (USER) wins.
+ */
+
+/* ---- Places sidebar ------------------------------------------------------- */
+
+.orca-places {
+    padding: 8px 6px;
+}
+
+.orca-place {
+    padding: 7px 10px;
+    margin: 1px 2px;
+    border-radius: 8px;
+}
+
+.orca-place label {
+    font-weight: 500;
+}
+
+.orca-settings-row {
+    padding: 4px 2px;
+}
+
+/* ---- Preview panel -------------------------------------------------------- */
+
+.orca-preview {
+    padding: 12px 12px;
+}
+
+.orca-preview .orca-section-label {
+    margin-top: 0;
+}
+
+.orca-preview-text {
+    border-radius: 8px;
+    font-size: 0.88em;
+}
+
+.orca-preview-meta {
+    margin-top: 6px;
+    font-size: 0.9em;
+}
+
+/* ---- Toolbar -------------------------------------------------------------- */
+
+.orca-toolbar {
+    padding: 6px 8px;
+}
+
+.orca-toolbar button {
+    min-width: 30px;
+    min-height: 30px;
+    border-radius: 8px;
+}
+
+.orca-toolbar separator {
+    margin: 4px 4px;
+}
+
+/* ---- Status bar ----------------------------------------------------------- */
+
+.orca-statusbar {
+    padding: 4px 10px;
+    font-size: 0.9em;
+}
+
+/* ---- Home page ------------------------------------------------------------ */
+
+.orca-home {
+    padding: 30px 40px 44px 40px;
+}
+
+.orca-home-header {
+    margin-bottom: 8px;
+}
+
+.orca-home-title {
+    font-size: 1.95rem;
+    font-weight: 800;
+}
+
+.orca-section-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    margin: 14px 2px 2px 2px;
+}
+
+/* ---- Cards ---------------------------------------------------------------- */
+
+.orca-card-grid > flowboxchild {
+    padding: 0;
+    border-radius: 14px;
+}
+
+.orca-card-grid > flowboxchild:focus {
+    outline: none;
+}
+
+.orca-card {
+    border-radius: 14px;
+    padding: 14px 16px;
+    transition: background 130ms ease, border-color 130ms ease;
+}
+
+.orca-card label {
+    font-weight: 600;
+}
+
+.orca-card-title {
+    font-weight: 700;
+}
+
+.orca-card-subtitle {
+    font-size: 0.82em;
+    font-weight: 400;
+}
+
+.orca-drive-card {
+    padding-bottom: 12px;
+}
+
+.orca-drive-bar {
+    min-height: 6px;
+    margin-top: 4px;
+}
+
+.orca-drive-bar trough,
+.orca-drive-bar progress {
+    min-height: 6px;
+    border-radius: 6px;
+}
+
+/* ---- Appearance popover --------------------------------------------------- */
+
+.orca-appearance-menu {
+    min-width: 250px;
+    padding: 6px 4px;
+}
+
+.orca-appearance-menu button {
+    padding: 6px 8px;
+}
+
+.orca-appearance-row {
+    padding: 2px 4px;
+}
+
+.orca-note {
+    font-size: 0.82em;
+    margin-top: 4px;
+}
+
+/* ---- Git status badges ---------------------------------------------------- */
+
+.git-badge {
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 0 3px;
+    border-radius: 3px;
+    min-width: 14px;
+}
+
+.git-modified  { color: #e6a817; background: alpha(#e6a817, 0.15); }
+.git-added     { color: #4caf50; background: alpha(#4caf50, 0.15); }
+.git-deleted   { color: #e53935; background: alpha(#e53935, 0.15); }
+.git-renamed   { color: #5c6bc0; background: alpha(#5c6bc0, 0.15); }
+.git-untracked { color: #9e9e9e; background: alpha(#9e9e9e, 0.15); }
+.git-conflicted { color: #e53935; background: alpha(#e53935, 0.25); }

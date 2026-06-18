@@ -1,0 +1,93 @@
+# Orca workspace root.
+#
+# All member crates share package metadata via `[workspace.package]` and
+# dependency versions via `[workspace.dependencies]`. Member crates opt into a
+# dependency with `foo = { workspace = true }` so versions stay consistent
+# across the workspace. Every dependency listed here is justified inline per the
+# project rule "all new dependencies must be justified".
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/orca-core",
+    "crates/orca-vault",
+    "crates/orca-gui",
+    "crates/orca-plugin",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-only"
+authors = ["lunanoir21 <anilbektas541@gmail.com>"]
+repository = "https://github.com/lunanoir21/orca"
+homepage = "https://github.com/lunanoir21/orca"
+description = "A full-featured, security-focused Linux file manager written in Rust."
+
+[workspace.dependencies]
+# --- Error handling -------------------------------------------------------
+thiserror = "2"        # typed error enums for library crates
+anyhow = "1"           # error propagation in the binary crate
+
+# --- Logging --------------------------------------------------------------
+tracing = "0.1"                # structured logging facade, no println! in libs
+tracing-subscriber = "0.3"     # log formatting/init in the binary
+
+# --- Async ----------------------------------------------------------------
+tokio = "1"            # async runtime for all async code
+
+# --- Serialization / config ----------------------------------------------
+serde = "1"            # config (de)serialization
+toml = "0.8"           # config file format
+
+# --- Filesystem -----------------------------------------------------------
+notify = "6"           # filesystem watching
+walkdir = "2"          # recursive directory traversal
+
+# --- Checksums ------------------------------------------------------------
+sha2 = "0.10"          # SHA-256 checksums
+md-5 = "0.10"          # MD5 checksums
+blake3 = "1"           # Blake3 checksums
+
+# --- Search / regex -------------------------------------------------------
+regex = "1"            # bulk-rename and search patterns
+globset = "0.4"        # glob pattern matching for search
+grep-regex = "0.1"     # ripgrep's regex matcher core (content search)
+grep-searcher = "0.1"  # ripgrep's streaming line searcher + binary detection
+
+# --- Archive --------------------------------------------------------------
+zip = "2"              # zip compress/extract
+tar = "0.4"            # tar archives
+flate2 = "1"           # gzip layer
+xz2 = "0.1"            # xz layer
+bzip2 = "0.4"          # bzip2 layer
+
+# --- Git ------------------------------------------------------------------
+git2 = "0.20.4"        # git status reader (>=0.20.4 fixes RUSTSEC-2026-0008 unsoundness)
+
+# --- System / syscalls ----------------------------------------------------
+rustix = "0.38"        # safe statvfs (filesystem usage) without unsafe in-crate
+zbus = "4"             # D-Bus client for UDisks2 mount management
+
+# --- Network locations ----------------------------------------------------
+ssh2 = "0.9"           # SFTP client (libssh2 binding)
+suppaftp = "6"         # FTP client (maintained successor to the `ftp` crate)
+secret-service = "4"   # OS keyring credential storage over Secret Service D-Bus
+
+# --- Encryption (orca-vault — versions pinned exactly in 2.x, see crate) ---
+age = "0.11"           # file encryption envelope
+argon2 = "0.5"         # passphrase key derivation
+zeroize = "1"          # wipe key material from memory
+
+# --- GUI ------------------------------------------------------------------
+relm4 = "0.11"         # Elm-style GTK4 UI framework (re-exports gtk4 as relm4::gtk)
+
+# --- Plugin system --------------------------------------------------------
+mlua = "0.10"          # Lua 5.4 plugin runtime
+
+# --- XDG / directories ----------------------------------------------------
+dirs = "5"             # XDG base directory resolution
+
+# --- Time -----------------------------------------------------------------
+time = "0.3"           # ISO-8601 timestamps for XDG .trashinfo files

@@ -1,0 +1,29 @@
+# orca-plugin — Lua 5.4 plugin system (Phase 8).
+#
+# Plugins run in a sandboxed Lua 5.4 environment with only string/table/math
+# from the standard library. The `orca.*` API is the sole interface to Orca
+# internals. `lua54` + `vendored` bundles the Lua 5.4 C source — no system Lua
+# required at runtime.
+
+[package]
+name = "orca-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orca Lua 5.4 plugin system with a sandboxed orca.* API."
+
+[dependencies]
+# Lua 5.4 embedded runtime. `lua54` selects the version; `vendored` bundles
+# the C source so no system Lua installation is required.
+mlua = { workspace = true, features = ["lua54", "vendored"] }
+# Typed error enum for all plugin errors.
+thiserror = { workspace = true }
+# Structured logging (plugins write to the tracing log, not stdout).
+tracing = { workspace = true }
+
+[dev-dependencies]
+# Temporary directories for integration tests.
+tempfile = "3"

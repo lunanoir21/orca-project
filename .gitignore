@@ -1,0 +1,25 @@
+# Rust build artifacts
+/target
+**/target
+Cargo.lock.bak
+
+# Fuzzing artifacts (corpus is committed explicitly; build output is not)
+/fuzz/target
+/fuzz/corpus/*/.state
+
+# Vault and key material — must never be committed
+*.vault
+*.key
+*.age
+.orca-vault/
+
+# Local config overrides
+/config/local.toml
+config.local.toml
+
+# Editor / OS noise
+*.swp
+*~
+.DS_Store
+.idea/
+.vscode/

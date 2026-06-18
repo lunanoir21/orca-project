@@ -1,0 +1,52 @@
+# Orca fuzzing harness (cargo-fuzz / libFuzzer).
+#
+# This is an independent package detached from the workspace (note the empty
+# `[workspace]` table below) so `cargo build --workspace` on stable never tries
+# to compile the libFuzzer targets, which require the nightly toolchain.
+#
+# Fuzz targets themselves (vault_decrypt, vault_index_parse, archive_extract)
+# are implemented in TASKS.md Phase 2.11 once the corresponding orca-vault and
+# orca-core APIs exist. Run with:
+#
+#   cargo +nightly fuzz run vault_decrypt
+#
+[package]
+name = "orca-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Detach from the parent workspace; the fuzz package is built only with nightly.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+orca-vault = { path = "../crates/orca-vault" }
+orca-core = { path = "../crates/orca-core" }
+# Current-thread runtime to drive orca-core's async `extract` from the
+# synchronous libFuzzer harness.
+tokio = { version = "1", features = ["rt", "time"] }
+
+[[bin]]
+name = "vault_decrypt"
+path = "fuzz_targets/vault_decrypt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vault_index_parse"
+path = "fuzz_targets/vault_index_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_extract"
+path = "fuzz_targets/archive_extract.rs"
+test = false
+doc = false
+bench = false

@@ -1,0 +1,50 @@
+# orca-gui — GTK4/relm4 application (binary crate).
+#
+# This is the only crate where `unwrap()`/`expect()` are permitted, and only
+# where a panic is genuinely unrecoverable. GUI dependencies (gtk4, relm4, vte,
+# sourceview, gstreamer) land in Phase 3. Phase 0 ships a minimal binary.
+
+[package]
+name = "orca-gui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orca GTK4/relm4 desktop file manager (application binary)."
+
+[[bin]]
+name = "orca"
+path = "src/main.rs"
+
+[dependencies]
+orca-core = { path = "../orca-core" }
+orca-vault = { path = "../orca-vault" }
+orca-plugin = { path = "../orca-plugin" }
+
+# GTK4 UI via relm4 (re-exports gtk4 as `relm4::gtk`).
+relm4 = { workspace = true }
+# Enable GTK 4.12 APIs (AlertDialog, FileLauncher::set_always_ask) on relm4's
+# bundled gtk4.
+gtk4 = { version = "0.11", features = ["v4_12"] }
+# Structured startup/runtime logging (no println! in the application).
+tracing = { workspace = true }
+# `env-filter` enables RUST_LOG-driven log level filtering at startup.
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+# Embedded terminal panel (Phase 4.7): GTK4 binding of VTE (vte-2.91-gtk4).
+# System library `vte-2.91-gtk4` (>= 0.84) must be present at build time.
+vte4 = "0.10"
+# XDG base directory resolution for config/data/cache.
+dirs = { workspace = true }
+# Local-time formatting of file modification timestamps in the browser columns.
+time = { workspace = true, features = ["local-offset"] }
+# Config/toolbar/keybind (de)serialization from TOML.
+serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
+# Async channels for streaming archive progress from orca-core to the UI.
+tokio = { workspace = true, features = ["sync"] }
+
+[dev-dependencies]
+# Scratch files for preview-panel unit tests (text/binary detection).
+tempfile = "3"

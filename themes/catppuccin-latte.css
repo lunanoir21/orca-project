@@ -1,0 +1,6 @@
+/* Catppuccin Latte — light theme */
+@define-color orca_bg      #eff1f5;
+@define-color orca_surface #e6e9ef;
+@define-color orca_text    #4c4f69;
+@define-color orca_subtext #6c6f85;
+@define-color orca_accent  #1e66f5;

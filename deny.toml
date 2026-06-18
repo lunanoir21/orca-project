@@ -1,0 +1,42 @@
+# cargo-deny policy for Orca. Run with `cargo deny check`.
+#
+# Enforces: GPL-compatible license policy, the RustSec advisory database, and a
+# ban list for crates we never want pulled in (e.g. unmaintained crypto).
+
+[advisories]
+# Use the default RustSec advisory database; fail on any vulnerability.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+unmaintained = "workspace"
+
+[licenses]
+# Orca is GPL-3.0-only. Allow the permissive licenses GPL projects may include,
+# all of which are GPL-3.0 compatible.
+allow = [
+    "GPL-3.0",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CC0-1.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Crates we never want: known-unmaintained or superseded crypto/utility crates.
+deny = [
+    { name = "openssl", reason = "Orca uses rustls/age; avoid system OpenSSL linkage." },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# Only crates.io is trusted (project rule 9.8: no git dependencies in releases).
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,65 @@
+# orca-core — filesystem engine.
+#
+# Dependencies are added phase by phase as features land (see TASKS.md Phase 1).
+# Phase 0 ships an empty but compiling crate.
+
+[package]
+name = "orca-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Orca filesystem engine: listing, file ops, trash, search, archives, checksums."
+
+[dependencies]
+thiserror = { workspace = true }   # typed crate error enum (Phase 1.1)
+tracing = { workspace = true }     # structured logging, no println! in libs
+tokio = { workspace = true, features = [
+    "fs",
+    "rt",
+    "sync",
+    "macros",
+    "io-util",
+    "time",
+] } # async filesystem + cancellation + debounce (Phase 1.2/1.3/1.5)
+notify = { workspace = true }  # inotify-based filesystem watching (Phase 1.5)
+dirs = { workspace = true }    # XDG trash directory resolution (Phase 1.4)
+time = { workspace = true, features = [
+    "local-offset",
+] } # .trashinfo timestamps (Phase 1.4)
+walkdir = { workspace = true }         # recursive traversal for search (Phase 1.7)
+globset = { workspace = true }         # glob pattern matching for name search (Phase 1.7)
+grep-regex = { workspace = true }      # ripgrep regex matcher for content search (Phase 1.7)
+grep-searcher = { workspace = true }   # ripgrep streaming searcher + binary skip (Phase 1.7)
+sha2 = { workspace = true }            # SHA-256 checksums (Phase 1.8)
+md-5 = { workspace = true }            # MD5 checksums (Phase 1.8)
+blake3 = { workspace = true }          # Blake3 checksums (Phase 1.8)
+regex = { workspace = true }           # bulk-rename find/replace patterns (Phase 1.9)
+zip = { workspace = true }             # zip compress/extract (Phase 1.10)
+tar = { workspace = true }             # tar archive container (Phase 1.10)
+flate2 = { workspace = true }          # gzip codec for tar.gz (Phase 1.10)
+xz2 = { workspace = true }             # xz codec for tar.xz (Phase 1.10)
+bzip2 = { workspace = true }           # bzip2 codec for tar.bz2 (Phase 1.10)
+git2 = { workspace = true }            # git working-tree status (Phase 1.11)
+rustix = { workspace = true, features = [
+    "fs",
+] } # safe statvfs for filesystem usage (Phase 1.12)
+zbus = { workspace = true, features = [
+    "tokio",
+] } # UDisks2 D-Bus client for mount management (Phase 1.13)
+futures-util = "0.3" # Stream combinators for the mount-event signal stream (Phase 1.13)
+serde = { workspace = true, features = [
+    "derive",
+] } # serialize saved network connections (Phase 1.14)
+toml = { workspace = true }            # connections config file format (Phase 1.14)
+ssh2 = { workspace = true }            # SFTP client (Phase 1.14)
+suppaftp = { workspace = true }        # FTP client (Phase 1.14)
+secret-service = { workspace = true, features = [
+    "rt-tokio-crypto-rust",
+] } # keyring credential storage (Phase 1.14)
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "rt-multi-thread"] }
+tempfile = "3" # scratch directories for filesystem tests

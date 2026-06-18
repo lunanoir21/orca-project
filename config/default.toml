@@ -1,0 +1,62 @@
+# Orca default configuration.
+#
+# This file ships with Orca and provides the fallback value for every option.
+# User config lives at $XDG_CONFIG_HOME/orca/config.toml and overrides only the
+# keys it sets; anything omitted falls back to the values documented here.
+
+[general]
+# Show dot-prefixed hidden files in listings.
+show_hidden = false
+# Open files/folders on a single click instead of double click.
+single_click_open = false
+# Ask for confirmation before moving files to trash.
+confirm_delete = true
+# Default view mode for new tabs: "list", "icon", or "detail".
+default_view = "list"
+
+[appearance]
+# Theme name; resolves to a CSS file in the themes directory.
+theme = "catppuccin-mocha"
+# UI / list font (Pango font description).
+font = "JetBrains Mono 11"
+# Icon size in pixels. Allowed: 16, 24, 32, 48, 64, 96, 128.
+icon_size = 32
+
+[preview]
+# Maximum file size (bytes) Orca will load into the preview panel. Default 10 MB.
+max_preview_bytes = 10485760
+
+[keybinds]
+new_tab       = "Ctrl+T"
+close_tab     = "Ctrl+W"
+duplicate_tab = "Ctrl+D"
+toggle_hidden = "Ctrl+H"
+toggle_dual_pane = "F3"
+open_terminal = "F4"
+copy_to_pane  = "F5"
+move_to_pane  = "F6"
+rename        = "F2"
+search        = "Ctrl+F"
+path_entry    = "Ctrl+L"
+back          = "Alt+Left"
+forward       = "Alt+Right"
+up            = "Alt+Up"
+view_list     = "Ctrl+1"
+view_icon     = "Ctrl+2"
+view_detail   = "Ctrl+3"
+vault_add     = "Ctrl+Shift+V"
+
+[terminal]
+# Shell launched in the embedded terminal. Empty string uses $SHELL.
+shell = ""
+font = "JetBrains Mono 11"
+
+# Vaults are user-defined; none ship by default. Example shape:
+# [[vaults]]
+# name              = "Personal"
+# path              = "~/.local/share/orca/vaults/personal"
+# auto_lock_minutes = 5
+
+[plugins]
+# Built-in plugins enabled by default.
+enabled = ["git-status", "archive"]
