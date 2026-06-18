@@ -1,0 +1,106 @@
+.TH ORCA 1 "2026-06-18" "Orca 0.1.0" "User Commands"
+.SH NAME
+orca \- full-featured, security-focused Linux file manager
+.SH SYNOPSIS
+.B orca-gui
+.RI [ OPTION ...]
+.SH DESCRIPTION
+.B Orca
+is a Wayland-first Linux file manager written in Rust with GTK4.
+It provides a dual-pane browser, integrated encrypted vaults, a sandboxed
+Lua plugin API, and extensive keyboard-driven navigation.
+.SH OPTIONS
+.TP
+.B \-\-help
+Print a usage summary and exit.
+.TP
+.B \-\-version
+Print the version string and exit.
+.SH ENVIRONMENT
+.TP
+.B RUST_LOG
+Controls log verbosity.
+Default:
+.BR info .
+Accepted values (least to most verbose):
+.BR error ,
+.BR warn ,
+.BR info ,
+.BR debug ,
+.BR trace .
+.TP
+.B XDG_CONFIG_HOME
+Base directory for the user configuration file
+.RB ( config.toml ).
+Default:
+.IR ~/.config .
+.TP
+.B XDG_DATA_HOME
+Base directory for data files (vaults, themes, plugins).
+Default:
+.IR ~/.local/share .
+.TP
+.B XDG_CACHE_HOME
+Base directory for thumbnail cache.
+Default:
+.IR ~/.cache .
+.SH FILES
+.TP
+.I $XDG_CONFIG_HOME/orca/config.toml
+User configuration. Written with defaults on first run.
+.TP
+.I $XDG_DATA_HOME/orca/plugins/
+User Lua plugins.
+.TP
+.I $XDG_DATA_HOME/orca/themes/
+User CSS themes.
+.TP
+.I $XDG_DATA_HOME/orca/vaults/
+Default vault storage directory.
+.TP
+.I $XDG_CACHE_HOME/orca/thumbnails/
+Thumbnail cache (XDG thumbnail spec).
+.SH DEFAULT KEYBINDINGS
+.TS
+tab(|) allbox;
+lb lb
+l l.
+Action|Keybind
+New tab|Ctrl+T
+Close tab|Ctrl+W
+Toggle hidden files|Ctrl+H
+Toggle terminal panel|F4
+Toggle preview panel|F7
+Toggle dual pane|F3
+Inline rename|F2
+Back|Alt+Left
+Forward|Alt+Right
+Up|Alt+Up
+Search|Ctrl+F
+Edit path|Ctrl+L
+List view|Ctrl+1
+Icon view|Ctrl+2
+Detail view|Ctrl+3
+.TE
+.PP
+All keybinds are rebindable in Settings → Keyboard Shortcuts.
+.SH PLUGIN API
+Plugins are Lua 5.4 scripts with access to the
+.B orca.*
+namespace. They run in a sandbox that blocks
+.BR io ,
+.BR os ,
+.BR package ,
+and
+.BR debug .
+See
+.I /usr/share/doc/orca/plugins.md
+for the full API reference.
+.SH AUTHOR
+Written by lunanoir21 <anilbektas541@gmail.com>.
+.SH LICENSE
+GPL-3.0-only.
+.SH SEE ALSO
+.BR dolphin (1),
+.BR nautilus (1),
+.BR xdg-open (1)

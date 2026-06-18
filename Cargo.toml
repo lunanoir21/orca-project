@@ -64,7 +64,7 @@ xz2 = "0.1"            # xz layer
 bzip2 = "0.4"          # bzip2 layer
 
 # --- Git ------------------------------------------------------------------
-git2 = "0.20.4"        # git status reader (>=0.20.4 fixes RUSTSEC-2026-0008 unsoundness)
+git2 = "0.21.0"        # git status reader (>=0.21.0 fixes RUSTSEC-2026-0183/0184 unsoundness)
 
 # --- System / syscalls ----------------------------------------------------
 rustix = "0.38"        # safe statvfs (filesystem usage) without unsafe in-crate

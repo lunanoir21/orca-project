@@ -40,6 +40,10 @@ fn lock(stream: &Arc<Mutex<FtpStream>>) -> Result<std::sync::MutexGuard<'_, FtpS
 impl FtpClient {
     /// Connect to `host:port` and log in as `username`.
     ///
+    /// **Security warning:** plain FTP transmits credentials and data in
+    /// cleartext. Use SFTP for any sensitive connection. This function logs a
+    /// `tracing::warn` before connecting so the risk is visible in logs.
+    ///
     /// # Errors
     /// [`OrcaError::Other`] if the connection or login fails.
     pub async fn connect(
@@ -51,6 +55,8 @@ impl FtpClient {
         let host = host.into();
         let username = username.into();
         let password = password.into();
+        // Credentials and data travel in cleartext over plain FTP.
+        tracing::warn!(host = %host, port = port, "connecting via unencrypted FTP — use SFTP for sensitive data");
         tokio::task::spawn_blocking(move || {
             let mut stream = FtpStream::connect(format!("{host}:{port}")).map_err(map_ftp)?;
             stream.login(&username, &password).map_err(map_ftp)?;

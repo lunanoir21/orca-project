@@ -8,19 +8,20 @@
 mod app;
 mod archive_view;
 mod bulk_rename;
-mod keybind;
-mod disk_usage;
-mod mount_manager;
-mod network;
 mod config;
 mod dialogs;
+mod disk_usage;
 mod format;
 mod home;
 mod i18n;
+mod keybind;
+mod mount_manager;
 mod nav;
+mod network;
 mod pane;
 mod permissions;
 mod places;
+mod plugin_manager_ui;
 mod preview;
 mod properties;
 mod settings;
@@ -75,12 +76,20 @@ fn main() {
         .map(|bin_dir| {
             // dev: target/debug/orca → workspace root / plugins
             let candidate = bin_dir.join("../../plugins");
-            if candidate.is_dir() { candidate } else { bin_dir.join("plugins") }
+            if candidate.is_dir() {
+                candidate
+            } else {
+                bin_dir.join("plugins")
+            }
         })
         .unwrap_or_else(|| std::path::PathBuf::from("/usr/share/orca/plugins"));
 
     let app = RelmApp::new(APP_ID);
-    app.run::<AppModel>(AppInit { paths, config, builtin_plugins });
+    app.run::<AppModel>(AppInit {
+        paths,
+        config,
+        builtin_plugins,
+    });
 }
 
 /// Initialise `tracing-subscriber` from the `RUST_LOG` environment variable,

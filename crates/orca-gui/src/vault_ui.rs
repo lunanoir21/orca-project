@@ -62,11 +62,20 @@ pub enum VaultPanelInput {
     /// Show the "Create New Vault" dialog.
     ShowCreateDialog,
     /// Actually create the vault after the dialog is confirmed.
-    DoCreate { name: String, path: PathBuf, passphrase: String },
+    DoCreate {
+        name: String,
+        path: PathBuf,
+        passphrase: String,
+    },
     /// Show the "Import Vault" dialog.
     ShowImportDialog,
     /// Actually import the vault backup.
-    DoImport { name: String, backup: PathBuf, dest: PathBuf, passphrase: String },
+    DoImport {
+        name: String,
+        backup: PathBuf,
+        dest: PathBuf,
+        passphrase: String,
+    },
     /// Export a backup of the named vault to a user-chosen path.
     ExportBackup(String),
     /// Verify the integrity of the named vault.
@@ -192,12 +201,7 @@ impl Component for VaultPanel {
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        msg: Self::Input,
-        sender: ComponentSender<Self>,
-        root: &Self::Root,
-    ) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, root: &Self::Root) {
         let parent = parent_window(root);
 
         match msg {
@@ -226,7 +230,9 @@ impl Component for VaultPanel {
                     let _ = guard.lock_vault(name);
                     tracing::info!(vault = %name, "auto-lock fired");
                     drop(guard);
-                    sender.output(VaultPanelOutput::AutoLocked(name.clone())).ok();
+                    sender
+                        .output(VaultPanelOutput::AutoLocked(name.clone()))
+                        .ok();
                 }
                 self.rebuild_list(&sender);
                 self.emit_status(&sender);
@@ -235,16 +241,12 @@ impl Component for VaultPanel {
             VaultPanelInput::TryUnlock(name) => {
                 let s = sender.clone();
                 let n = name.clone();
-                dialogs::passphrase(
-                    parent.as_ref(),
-                    &i18n::t("vault.unlock"),
-                    move |pass| {
-                        s.input(VaultPanelInput::DoUnlock {
-                            name: n.clone(),
-                            passphrase: pass,
-                        });
-                    },
-                );
+                dialogs::passphrase(parent.as_ref(), &i18n::t("vault.unlock"), move |pass| {
+                    s.input(VaultPanelInput::DoUnlock {
+                        name: n.clone(),
+                        passphrase: pass,
+                    });
+                });
             }
 
             VaultPanelInput::DoUnlock { name, passphrase } => {
@@ -343,7 +345,11 @@ impl Component for VaultPanel {
                 show_create_dialog(parent.as_ref(), sender.clone());
             }
 
-            VaultPanelInput::DoCreate { name, path, passphrase } => {
+            VaultPanelInput::DoCreate {
+                name,
+                path,
+                passphrase,
+            } => {
                 let mgr = self.mgr.clone();
                 let n = name.clone();
                 let p = path.clone();
@@ -371,19 +377,19 @@ impl Component for VaultPanel {
                 show_import_dialog(parent.as_ref(), sender.clone());
             }
 
-            VaultPanelInput::DoImport { name, backup, dest, passphrase } => {
+            VaultPanelInput::DoImport {
+                name,
+                backup,
+                dest,
+                passphrase,
+            } => {
                 let mgr = self.mgr.clone();
                 let n = name.clone();
                 sender.oneshot_command(async move {
                     let result = relm4::spawn_blocking(move || {
                         // Import the backup to disk, then register with the manager.
-                        orca_vault::Vault::import_backup(
-                            &backup,
-                            passphrase.as_bytes(),
-                            &dest,
-                            &n,
-                        )
-                        .map_err(|e| e.to_string())?;
+                        orca_vault::Vault::import_backup(&backup, passphrase.as_bytes(), &dest, &n)
+                            .map_err(|e| e.to_string())?;
                         let config = VaultConfig {
                             name: n.clone(),
                             path: dest.join(&n),
@@ -431,7 +437,9 @@ impl Component for VaultPanel {
                                     })
                                     .await
                                     .unwrap_or_else(|e| Err(e.to_string()));
-                                    s2.oneshot_command(async move { VaultPanelCmd::Exported(result) });
+                                    s2.oneshot_command(
+                                        async move { VaultPanelCmd::Exported(result) },
+                                    );
                                 });
                             }
                         }
@@ -463,7 +471,9 @@ impl Component for VaultPanel {
                 }
                 self.rebuild_list(&sender);
                 let configs = self.mgr.lock().unwrap().configs().to_vec();
-                sender.output(VaultPanelOutput::ConfigsChanged(configs)).ok();
+                sender
+                    .output(VaultPanelOutput::ConfigsChanged(configs))
+                    .ok();
             }
         }
     }
@@ -481,7 +491,9 @@ impl Component for VaultPanel {
                 self.rebuild_list(&sender);
                 self.emit_status(&sender);
                 let configs = self.mgr.lock().unwrap().configs().to_vec();
-                sender.output(VaultPanelOutput::ConfigsChanged(configs)).ok();
+                sender
+                    .output(VaultPanelOutput::ConfigsChanged(configs))
+                    .ok();
             }
 
             VaultPanelCmd::Unlocked(_name, Err(e)) => {
@@ -501,7 +513,9 @@ impl Component for VaultPanel {
                 self.rebuild_list(&sender);
                 self.emit_status(&sender);
                 let configs = self.mgr.lock().unwrap().configs().to_vec();
-                sender.output(VaultPanelOutput::ConfigsChanged(configs)).ok();
+                sender
+                    .output(VaultPanelOutput::ConfigsChanged(configs))
+                    .ok();
             }
 
             VaultPanelCmd::Created(_name, Err(e)) => {
@@ -547,7 +561,9 @@ impl Component for VaultPanel {
             VaultPanelCmd::Imported(_name, Ok(())) => {
                 self.rebuild_list(&sender);
                 let configs = self.mgr.lock().unwrap().configs().to_vec();
-                sender.output(VaultPanelOutput::ConfigsChanged(configs)).ok();
+                sender
+                    .output(VaultPanelOutput::ConfigsChanged(configs))
+                    .ok();
             }
 
             VaultPanelCmd::Imported(_name, Err(e)) => {
@@ -792,7 +808,10 @@ fn build_popover(
         .spacing(2)
         .build();
 
-    let mk = |label: &str, msg: VaultPanelInput, popover: &gtk::Popover, sender: &ComponentSender<VaultPanel>| {
+    let mk = |label: &str,
+              msg: VaultPanelInput,
+              popover: &gtk::Popover,
+              sender: &ComponentSender<VaultPanel>| {
         let btn = gtk::Button::builder()
             .label(label)
             .has_frame(false)
@@ -860,30 +879,26 @@ fn show_create_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
     let pass_entry = gtk::PasswordEntry::builder().show_peek_icon(true).build();
     vbox.append(&pass_entry);
 
-    let btn_row = dialog_buttons(
-        &window,
-        &i18n::t("vault.new_create"),
-        {
-            let ne = name_entry.clone();
-            let pe = path_entry.clone();
-            let pse = pass_entry.clone();
-            let w = window.clone();
-            move || {
-                let name = ne.text().to_string();
-                let path_str = pe.text().to_string();
-                let pass = pse.text().to_string();
-                if name.is_empty() || path_str.is_empty() || pass.is_empty() {
-                    return;
-                }
-                sender.input(VaultPanelInput::DoCreate {
-                    name,
-                    path: PathBuf::from(path_str),
-                    passphrase: pass,
-                });
-                w.close();
+    let btn_row = dialog_buttons(&window, &i18n::t("vault.new_create"), {
+        let ne = name_entry.clone();
+        let pe = path_entry.clone();
+        let pse = pass_entry.clone();
+        let w = window.clone();
+        move || {
+            let name = ne.text().to_string();
+            let path_str = pe.text().to_string();
+            let pass = pse.text().to_string();
+            if name.is_empty() || path_str.is_empty() || pass.is_empty() {
+                return;
             }
-        },
-    );
+            sender.input(VaultPanelInput::DoCreate {
+                name,
+                path: PathBuf::from(path_str),
+                passphrase: pass,
+            });
+            w.close();
+        }
+    });
     vbox.append(&btn_row);
 
     window.set_child(Some(&vbox));
@@ -919,37 +934,33 @@ fn show_import_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
     let pass_entry = gtk::PasswordEntry::builder().show_peek_icon(true).build();
     vbox.append(&pass_entry);
 
-    let btn_row = dialog_buttons(
-        &window,
-        &i18n::t("vault.import_do"),
-        {
-            let ne = name_entry.clone();
-            let be = backup_entry.clone();
-            let de = dest_entry.clone();
-            let pse = pass_entry.clone();
-            let w = window.clone();
-            move || {
-                let name = ne.text().to_string();
-                let backup = PathBuf::from(be.text().to_string());
-                let dest = PathBuf::from(de.text().to_string());
-                let pass = pse.text().to_string();
-                if name.is_empty()
-                    || backup.as_os_str().is_empty()
-                    || dest.as_os_str().is_empty()
-                    || pass.is_empty()
-                {
-                    return;
-                }
-                sender.input(VaultPanelInput::DoImport {
-                    name,
-                    backup,
-                    dest,
-                    passphrase: pass,
-                });
-                w.close();
+    let btn_row = dialog_buttons(&window, &i18n::t("vault.import_do"), {
+        let ne = name_entry.clone();
+        let be = backup_entry.clone();
+        let de = dest_entry.clone();
+        let pse = pass_entry.clone();
+        let w = window.clone();
+        move || {
+            let name = ne.text().to_string();
+            let backup = PathBuf::from(be.text().to_string());
+            let dest = PathBuf::from(de.text().to_string());
+            let pass = pse.text().to_string();
+            if name.is_empty()
+                || backup.as_os_str().is_empty()
+                || dest.as_os_str().is_empty()
+                || pass.is_empty()
+            {
+                return;
             }
-        },
-    );
+            sender.input(VaultPanelInput::DoImport {
+                name,
+                backup,
+                dest,
+                passphrase: pass,
+            });
+            w.close();
+        }
+    });
     vbox.append(&btn_row);
 
     window.set_child(Some(&vbox));
@@ -1082,7 +1093,10 @@ fn format_integrity_report(report: &IntegrityReport) -> String {
     for stored in &report.orphaned {
         issues.push(i18n::tf("vault.integrity_orphaned", &[("name", stored)]));
     }
-    let header = i18n::tf("vault.integrity_issues", &[("n", &issues.len().to_string())]);
+    let header = i18n::tf(
+        "vault.integrity_issues",
+        &[("n", &issues.len().to_string())],
+    );
     format!("{header}\n\n{}", issues.join("\n"))
 }
 

@@ -93,22 +93,14 @@ impl Component for ArchiveView {
 
         root.set_child(Some(&outer));
 
-        let model = ArchiveView {
-            path,
-            list_box,
-        };
+        let model = ArchiveView { path, list_box };
 
         sender.input(ArchiveViewInput::Reload);
 
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        msg: Self::Input,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match msg {
             ArchiveViewInput::Reload => {
                 let path = self.path.clone();

@@ -1,0 +1,51 @@
+app-id: io.github.lunanoir21.orca
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: orca-gui
+
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --filesystem=home
+  - --talk-name=org.freedesktop.UDisks2
+  - --talk-name=org.freedesktop.secrets
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/orca/cargo
+    RUST_BACKTRACE: '1'
+
+modules:
+  - name: libssh2
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DBUILD_SHARED_LIBS=ON
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: archive
+        url: https://github.com/libssh2/libssh2/releases/download/libssh2-1.11.0/libssh2-1.11.0.tar.gz
+        sha256: 3736161d4dc369f1d6cd7c06c88e25ccc3f461f19b56d57b73122a92e86e4fa1
+
+  - name: orca
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      - cargo --offline build --release --manifest-path Cargo.toml
+      - install -Dm755 target/release/orca-gui /app/bin/orca-gui
+      - install -Dm644 packaging/orca.desktop /app/share/applications/io.github.lunanoir21.orca.desktop
+      - install -Dm644 packaging/io.github.lunanoir21.orca.metainfo.xml /app/share/metainfo/io.github.lunanoir21.orca.metainfo.xml
+      - install -dm755 /app/share/orca/plugins
+      - cp plugins/*.lua /app/share/orca/plugins/
+      - install -dm755 /app/share/orca/themes
+      - cp themes/*.css /app/share/orca/themes/
+      - install -Dm644 config/default.toml /app/share/orca/default.toml
+    sources:
+      - type: dir
+        path: ..
+      - cargo-sources.json

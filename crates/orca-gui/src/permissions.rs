@@ -162,9 +162,7 @@ impl Component for PermissionsDialog {
             .build();
         let octal_lbl_header = gtk::Label::new(Some(&i18n::t("perms.octal")));
         octal_lbl_header.add_css_class("dim-label");
-        let octal_lbl = gtk::Label::builder()
-            .label(format_octal(&bits))
-            .build();
+        let octal_lbl = gtk::Label::builder().label(format_octal(&bits)).build();
         octal_lbl.add_css_class("monospace");
         octal_row.append(&octal_lbl_header);
         octal_row.append(&octal_lbl);

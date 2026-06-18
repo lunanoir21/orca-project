@@ -315,12 +315,7 @@ impl Component for NetworkBrowser {
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        msg: Self::Input,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match msg {
             NetworkBrowserInput::Reload => {
                 self.connections = orca_core::load_connections().unwrap_or_default();
@@ -393,14 +388,15 @@ impl Component for NetworkBrowser {
                 if let Some(session) = self.session.clone() {
                     let remote = entry.path.clone();
                     let name = entry.name.clone();
-                    let local_dir =
-                        dirs::download_dir().unwrap_or_else(|| PathBuf::from("."));
+                    let local_dir = dirs::download_dir().unwrap_or_else(|| PathBuf::from("."));
                     let local = local_dir.join(&name);
                     self.progress_rev.set_reveal_child(true);
                     self.status_label.set_label(&i18n::t("net.downloading"));
                     sender.oneshot_command(async move {
-                        let result =
-                            session.download(&remote, &local).await.map_err(|e| e.to_string());
+                        let result = session
+                            .download(&remote, &local)
+                            .await
+                            .map_err(|e| e.to_string());
                         NetworkBrowserCmd::Downloaded(name, result)
                     });
                 }
@@ -481,9 +477,10 @@ impl Component for NetworkBrowser {
             NetworkBrowserCmd::Downloaded(name, Ok(())) => {
                 self.progress_rev.set_reveal_child(false);
                 let dir = dirs::download_dir().unwrap_or_else(|| PathBuf::from("."));
-                self.status_label.set_label(
-                    &i18n::tf("net.downloaded", &[("path", &dir.join(&name).to_string_lossy())]),
-                );
+                self.status_label.set_label(&i18n::tf(
+                    "net.downloaded",
+                    &[("path", &dir.join(&name).to_string_lossy())],
+                ));
             }
             NetworkBrowserCmd::Downloaded(name, Err(e)) => {
                 self.progress_rev.set_reveal_child(false);
@@ -692,7 +689,9 @@ fn show_add_dialog(parent: &gtk::Window, sender: &ComponentSender<NetworkBrowser
     let proto_combo = gtk::DropDown::new(Some(proto_model), gtk::Expression::NONE);
     form.append(&form_field(&i18n::t("net.protocol"), &proto_combo));
 
-    let host_entry = gtk::Entry::builder().placeholder_text("example.com").build();
+    let host_entry = gtk::Entry::builder()
+        .placeholder_text("example.com")
+        .build();
     form.append(&form_field(&i18n::t("net.host"), &host_entry));
 
     let port_adj = gtk::Adjustment::new(22.0, 1.0, 65535.0, 1.0, 10.0, 0.0);

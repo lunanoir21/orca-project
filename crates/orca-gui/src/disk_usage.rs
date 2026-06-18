@@ -4,9 +4,9 @@
 //! and a **treemap** painted on a `gtk::DrawingArea`. Clicking a bar-chart row
 //! or treemap rectangle navigates the calling pane into that subdirectory.
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::cell::RefCell;
 
 /// Hit-test rectangle list: (absolute path, (x, y, w, h)).
 type HitRects = Rc<RefCell<Vec<(PathBuf, (f64, f64, f64, f64))>>>;
@@ -140,12 +140,7 @@ impl Component for DiskUsageDialog {
         ComponentParts { model, widgets }
     }
 
-    fn update(
-        &mut self,
-        msg: Self::Input,
-        sender: ComponentSender<Self>,
-        _root: &Self::Root,
-    ) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match msg {
             DiskUsageInput::Reload => {
                 let path = self.root_path.clone();
@@ -257,19 +252,20 @@ impl DiskUsageDialog {
         let rects: HitRects = Rc::new(RefCell::new(Vec::new()));
         let rects_draw = rects.clone();
 
-        self.treemap_area.set_draw_func(move |_area, cr, width, height| {
-            rects_draw.borrow_mut().clear();
-            draw_treemap(
-                cr,
-                &tree,
-                &root_path,
-                0.0,
-                0.0,
-                width as f64,
-                height as f64,
-                &rects_draw,
-            );
-        });
+        self.treemap_area
+            .set_draw_func(move |_area, cr, width, height| {
+                rects_draw.borrow_mut().clear();
+                draw_treemap(
+                    cr,
+                    &tree,
+                    &root_path,
+                    0.0,
+                    0.0,
+                    width as f64,
+                    height as f64,
+                    &rects_draw,
+                );
+            });
 
         // Remove existing click controllers before adding a new one.
         for ctrl in self.treemap_area.observe_controllers().snapshot() {
@@ -341,7 +337,9 @@ fn draw_treemap(
 
         // Store hit rect for click-to-navigate (only for non-trivial dirs).
         if !child.children.is_empty() {
-            rects.borrow_mut().push((root.join(&child.name), (rx, ry, rw, rh)));
+            rects
+                .borrow_mut()
+                .push((root.join(&child.name), (rx, ry, rw, rh)));
         }
 
         let (r, g, b) = PALETTE[i % PALETTE.len()];

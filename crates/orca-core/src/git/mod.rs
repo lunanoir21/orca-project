@@ -74,7 +74,10 @@ fn status_blocking(dir: &Path) -> Result<HashMap<PathBuf, GitStatus>> {
 
     let mut map = HashMap::with_capacity(statuses.len());
     for entry in statuses.iter() {
-        let Some(rel) = entry.path() else { continue };
+        let rel = match entry.path() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
         let abs = workdir.join(rel);
         map.insert(abs, classify(entry.status()));
     }

@@ -63,9 +63,27 @@ pub fn default_items() -> Vec<ToolbarItem> {
         Search, Separator, SyncScroll, Terminal, Up, ViewDetail, ViewIcon, ViewList,
     };
     vec![
-        Back, Forward, Up, Separator, Reload, Separator, NewFolder, NewFile, Separator, ViewList,
-        ViewIcon, ViewDetail, Separator, DualPane, SyncScroll, Preview, Terminal, MountManager,
-        Separator, Search, EditPath,
+        Back,
+        Forward,
+        Up,
+        Separator,
+        Reload,
+        Separator,
+        NewFolder,
+        NewFile,
+        Separator,
+        ViewList,
+        ViewIcon,
+        ViewDetail,
+        Separator,
+        DualPane,
+        SyncScroll,
+        Preview,
+        Terminal,
+        MountManager,
+        Separator,
+        Search,
+        EditPath,
     ]
 }
 

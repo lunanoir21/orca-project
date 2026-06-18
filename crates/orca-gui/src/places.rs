@@ -155,6 +155,15 @@ pub fn populate(panel: &gtk::Box, sender: &ComponentSender<AppModel>, bookmarks:
         AppMsg::OpenNetworkBrowser,
     ));
 
+    // Plugin manager section.
+    panel.append(&section_label(&i18n::t("sidebar.plugins")));
+    panel.append(&action_row(
+        "application-x-addon-symbolic",
+        &i18n::t("plugin.title"),
+        sender,
+        AppMsg::OpenPluginManager,
+    ));
+
     panel.append(&gtk::Box::builder().vexpand(true).build());
     panel.append(&action_row(
         "emblem-system-symbolic",

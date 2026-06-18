@@ -193,7 +193,8 @@ pub enum PaneInput {
     Announce,
     /// Apply plugin-provided badges to matching file items.
     UpdatePluginBadges(HashMap<PathBuf, (String, String)>),
-    /// Populate the plugin context-menu section.
+    /// Populate the plugin context-menu section (sent from app via relm4 message queue).
+    #[allow(dead_code)]
     SetPluginContextItems(Vec<(String, String)>),
     /// A plugin context item was activated; fire the action with selected paths.
     ContextPluginItem(String),
@@ -722,9 +723,7 @@ impl Component for FilePane {
                 // Kick off async git status after listing, no listing delay.
                 let dir = self.dir.clone();
                 sender.oneshot_command(async move {
-                    let statuses = orca_core::git_status(&dir)
-                        .await
-                        .unwrap_or_default();
+                    let statuses = orca_core::git_status(&dir).await.unwrap_or_default();
                     PaneCmd::GitStatus(statuses)
                 });
             }
@@ -1350,10 +1349,8 @@ impl FilePane {
         sender.command(move |out, shutdown| {
             shutdown
                 .register(async move {
-                    let (tx, mut rx) =
-                        tokio::sync::mpsc::channel::<orca_core::ArchiveProgress>(32);
-                    let handle =
-                        tokio::spawn(orca_core::compress(paths, dest, format, Some(tx)));
+                    let (tx, mut rx) = tokio::sync::mpsc::channel::<orca_core::ArchiveProgress>(32);
+                    let handle = tokio::spawn(orca_core::compress(paths, dest, format, Some(tx)));
                     while let Some(p) = rx.recv().await {
                         let fraction = if p.total > 0 {
                             p.processed as f64 / p.total as f64
@@ -1391,8 +1388,7 @@ impl FilePane {
                             tokio::sync::mpsc::channel::<orca_core::ArchiveProgress>(32);
                         let dest = dir.clone();
                         let arc = archive.clone();
-                        let handle =
-                            tokio::spawn(orca_core::extract(arc, dest, Some(tx)));
+                        let handle = tokio::spawn(orca_core::extract(arc, dest, Some(tx)));
                         while let Some(p) = rx.recv().await {
                             let fraction = if p.total > 0 {
                                 p.processed as f64 / p.total as f64
@@ -1704,10 +1700,7 @@ fn context_menu_model(plugin_section: &gio::Menu) -> gio::Menu {
     let meta = gio::Menu::new();
     meta.append(Some(&i18n::t("ctx.disk_usage")), Some("ctx.disk-usage"));
     meta.append(Some(&i18n::t("ctx.git_status")), Some("ctx.git-status"));
-    meta.append(
-        Some(&i18n::t("ctx.permissions")),
-        Some("ctx.permissions"),
-    );
+    meta.append(Some(&i18n::t("ctx.permissions")), Some("ctx.permissions"));
     meta.append(Some(&i18n::t("ctx.properties")), Some("ctx.properties"));
     menu.append_section(None, &meta);
 

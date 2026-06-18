@@ -257,6 +257,17 @@
 
 "sidebar.network" = "Network Locations"
 
+# Plugin manager
+"plugin.title"        = "Plugin Manager"
+"plugin.open_folder"  = "Open Plugins Folder"
+"plugin.enabled"      = "Enabled"
+"plugin.disabled"     = "Disabled"
+"plugin.error"        = "Error"
+"plugin.reload"       = "Reload"
+"plugin.log"          = "Log"
+"plugin.no_plugins"   = "No plugins installed."
+"sidebar.plugins"     = "Plugins"
+
 # Generic
 "common.cancel" = "Cancel"
 "common.close"  = "Close"
