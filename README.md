@@ -1,6 +1,8 @@
 # Orca
 
 > A full-featured, security-focused Linux file manager written in Rust.
+> BU PROJE TAMAMEN DEMO VE KESİNLİKTE TAM ENTEGRE BİR SİSTEM UYGULAMASI DEĞİLİDİR
+
 > Inspired by KDE Dolphin. Built from scratch. Wayland-first.
 
 Orca is a production-grade Linux file manager with an integrated encrypted
