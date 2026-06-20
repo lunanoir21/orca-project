@@ -4,6 +4,13 @@
 
 # Home / start page
 "home.title"           = "Başlangıç"
+"home.welcome"         = "Tekrar hoş geldin, {user}"
+"home.welcome_fallback" = "Tekrar hoş geldin"
+"home.subtitle"        = "Dosya yöneticiniz"
+"home.quick_actions"   = "HIZLI İŞLEMLER"
+"home.connect_server"  = "Sunucuya Bağlan"
+"home.recent"          = "SON KULLANILANLAR"
+"home.no_recent"       = "Henüz son kullanılan yok."
 "home.user_dirs"       = "KULLANICI DİZİNLERİ"
 "home.drives"          = "SÜRÜCÜLER"
 "home.bookmarks"       = "YER İMLERİ"
@@ -19,6 +26,7 @@
 "home.lang_restart"    = "Dil değişikliği yeniden başlatınca uygulanır."
 "settings.title"       = "Ayarlar"
 "settings.dim"         = "Arka plan karartma"
+"settings.panel_opacity" = "Panel saydamlığı"
 
 # Behaviour settings
 "home.behaviour"     = "Davranış"
@@ -26,6 +34,14 @@
 "set.single_click"   = "Tek tıklamayla aç"
 "set.confirm_delete" = "Çöpe atmadan önce onay iste"
 "set.default_view"   = "Varsayılan görünüm"
+"set.start_page"        = "Başlangıç sayfası"
+"set.start_page_files"  = "Dosyalar"
+"set.start_page_home"   = "Başlangıç"
+"set.cat_appearance" = "Görünüm"
+"set.cat_behaviour"  = "Davranış"
+"set.cat_keybinds"   = "Kısayollar"
+"set.cat_terminal"   = "Terminal"
+"set.cat_toolbar"    = "Araç Çubuğu"
 "set.font"           = "Yazı tipi"
 "set.view_list"      = "Liste"
 "set.view_icon"      = "Simge"
@@ -36,6 +52,9 @@
 "set.terminal"       = "Terminal"
 "set.terminal_shell" = "Kabuk"
 "set.terminal_font"  = "Terminal Yazı Tipi"
+"set.toolbar"         = "Araç Çubuğu"
+"set.show_toolbar"    = "Araç çubuğunu göster"
+"set.show_breadcrumb" = "Yol çubuğunu göster"
 "set.reset_defaults" = "Varsayılanlara Sıfırla"
 
 # User directory card labels
@@ -116,6 +135,11 @@
 "vault.pick_vault"         = "Kasa Seç"
 "vault.integrity_title"    = "Bütünlük Raporu — {name}"
 "vault.passphrase"         = "Parola"
+"vault.passphrase_confirm" = "Parola (tekrar)"
+"vault.passphrase_mismatch" = "Parolalar eşleşmiyor"
+"vault.strength_weak"      = "Zayıf"
+"vault.strength_fair"      = "Orta"
+"vault.strength_strong"    = "Güçlü"
 
 # Sidebar rail
 "sidebar.home"      = "Başlangıç"
@@ -140,6 +164,7 @@
 "tb.sync"       = "Eşzamanlı kaydırma"
 "tb.terminal"   = "Uçbirim (F4)"
 "tb.mounts"     = "Bağlantı Yöneticisi"
+"tb.separator"  = "Ayırıcı"
 
 # Right-click context menu
 "ctx.open"        = "Aç"
@@ -205,6 +230,8 @@
 "perms.octal"        = "Sekizlik"
 "perms.owner_group"  = "Sahip / Grup (UID:GID)"
 "perms.apply_owner"  = "Sahibi Değiştir"
+"perms.invalid_owner" = "Sahip ve grup sayısal UID/GID olmalı."
+"perms.fail"          = "Uygulanamadı: {err}"
 
 # Archive operations
 "arc.progress" = "Arşiv işleniyor…"
@@ -271,4 +298,5 @@
 
 # Generic
 "common.cancel" = "İptal"
+"common.ok"     = "Tamam"
 "common.close"  = "Kapat"

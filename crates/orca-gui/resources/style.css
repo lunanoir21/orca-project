@@ -19,6 +19,8 @@
     padding: 7px 10px;
     margin: 1px 2px;
     border-radius: 8px;
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .orca-place label {
@@ -27,6 +29,18 @@
 
 .orca-settings-row {
     padding: 4px 2px;
+}
+
+.orca-settings-nav {
+    padding: 4px 6px;
+}
+
+.orca-settings-cat {
+    padding: 8px 10px;
+    margin: 1px 0;
+    border-radius: 8px;
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ---- Preview panel -------------------------------------------------------- */
@@ -59,10 +73,65 @@
     min-width: 30px;
     min-height: 30px;
     border-radius: 8px;
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .orca-toolbar separator {
     margin: 4px 4px;
+}
+
+/* ---- Breadcrumb / path bar -------------------------------------------------- */
+
+.orca-navbar {
+    padding: 4px 8px;
+}
+
+.orca-crumb {
+    padding: 4px 10px;
+    margin: 0 1px;
+    border-radius: 8px;
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- Popovers (Mount Manager, vault row context menu) --------------------- */
+
+window.orca-root popover.background {
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Tab strip (TabbedPane / GtkNotebook) ---------------------------------- */
+
+.orca-notebook > header.top {
+    padding: 2px 4px 0 4px;
+}
+
+.orca-notebook > header.top tab {
+    padding: 6px 12px;
+    margin: 0 1px;
+    border-radius: 8px 8px 0 0;
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                color 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---- File list (rows get their colors from theme::apply(), transition lives
+   here since it's behavior, not color) --------------------------------------- */
+
+window.orca-root row,
+window.orca-root flowboxchild,
+window.orca-root gridview > child {
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tighter rows for a classic file-manager density instead of GTK's default
+   spacious list/columnview padding. */
+window.orca-root columnview row {
+    min-height: 28px;
+}
+
+window.orca-root columnview cell {
+    padding: 2px 8px;
 }
 
 /* ---- Status bar ----------------------------------------------------------- */
@@ -108,7 +177,14 @@
 .orca-card {
     border-radius: 14px;
     padding: 14px 16px;
-    transition: background 130ms ease, border-color 130ms ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+    transition: background 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.orca-card:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.30);
 }
 
 .orca-card label {
@@ -157,6 +233,13 @@
 .orca-note {
     font-size: 0.82em;
     margin-top: 4px;
+}
+
+/* ---- Quick Look overlay ---------------------------------------------------- */
+
+.orca-quicklook-card {
+    padding: 16px 20px;
+    border-radius: 14px;
 }
 
 /* ---- Git status badges ---------------------------------------------------- */

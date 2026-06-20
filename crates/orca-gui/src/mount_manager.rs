@@ -1,8 +1,12 @@
-//! Mount manager dialog (Phase 5.5).
+//! Mount manager popover (Phase 5.5).
 //!
 //! Lists all UDisks2-managed block devices visible via [`orca_core::list_mounts`]
 //! and lets the user mount, unmount, or eject them. The list auto-refreshes
 //! when [`orca_core::mount_events`] fires (plug/unplug).
+//!
+//! Built as a `gtk::Popover` (not a separate top-level window) anchored to its
+//! toolbar button, so managing mounts stays inside the single main window —
+//! consistent with every other in-window panel (preview, terminal, settings).
 
 use relm4::gtk;
 use relm4::gtk::prelude::*;
@@ -64,11 +68,10 @@ impl Component for MountManager {
 
     view! {
         #[root]
-        gtk::Window {
-            set_title: Some(&i18n::t("mnt.title")),
-            set_modal: true,
-            set_default_width: 620,
-            set_default_height: 420,
+        gtk::Popover {
+            set_autohide: true,
+            set_has_arrow: true,
+            set_size_request: (420, -1),
         }
     }
 
@@ -88,13 +91,20 @@ impl Component for MountManager {
             .margin_end(12)
             .build();
 
+        let title_lbl = gtk::Label::builder()
+            .label(i18n::t("mnt.title"))
+            .halign(gtk::Align::Start)
+            .css_classes(["heading"])
+            .build();
+        outer.append(&title_lbl);
+
         let list_box = gtk::ListBox::new();
         list_box.set_selection_mode(gtk::SelectionMode::None);
         list_box.add_css_class("boxed-list");
 
         let scroll = gtk::ScrolledWindow::builder()
             .vexpand(true)
-            .min_content_height(300)
+            .min_content_height(280)
             .child(&list_box)
             .build();
         outer.append(&scroll);
@@ -114,7 +124,7 @@ impl Component for MountManager {
         close_btn.set_halign(gtk::Align::End);
         {
             let root = root.clone();
-            close_btn.connect_clicked(move |_| root.close());
+            close_btn.connect_clicked(move |_| root.popdown());
         }
         btn_row.append(&refresh_btn);
         btn_row.append(&close_btn);

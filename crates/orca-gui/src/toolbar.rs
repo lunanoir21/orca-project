@@ -96,6 +96,10 @@ pub struct ToolbarHandles {
     pub forward: Option<gtk::Button>,
     /// List/icon/detail view-mode toggles.
     pub view_toggles: Vec<(ViewMode, gtk::ToggleButton)>,
+    /// The Mount Manager button — anchor point for its popover (it has no
+    /// other entry point, so a popover, not a separate window, keeps mount
+    /// management inside the single main window).
+    pub mount_btn: Option<gtk::Button>,
 }
 
 impl ToolbarHandles {
@@ -118,6 +122,60 @@ impl ToolbarHandles {
     }
 }
 
+/// All real (non-separator) toolbar items, in their shipped default order —
+/// the universe of choices the toolbar customization UI offers.
+#[must_use]
+pub fn all_items() -> &'static [ToolbarItem] {
+    use ToolbarItem::{
+        Back, DualPane, EditPath, Forward, MountManager, NewFile, NewFolder, Preview, Reload,
+        Search, SyncScroll, Terminal, Up, ViewDetail, ViewIcon, ViewList,
+    };
+    &[
+        Back,
+        Forward,
+        Up,
+        Reload,
+        NewFolder,
+        NewFile,
+        ViewList,
+        ViewIcon,
+        ViewDetail,
+        DualPane,
+        SyncScroll,
+        Preview,
+        Terminal,
+        MountManager,
+        Search,
+        EditPath,
+    ]
+}
+
+/// The i18n key used for this item's label/tooltip everywhere (toolbar
+/// buttons and the settings customization list).
+#[must_use]
+pub fn item_label(item: ToolbarItem) -> String {
+    let key = match item {
+        ToolbarItem::Back => "tb.back",
+        ToolbarItem::Forward => "tb.forward",
+        ToolbarItem::Up => "tb.up",
+        ToolbarItem::Reload => "tb.reload",
+        ToolbarItem::NewFolder => "tb.new_folder",
+        ToolbarItem::NewFile => "tb.new_file",
+        ToolbarItem::ViewList => "tb.view_list",
+        ToolbarItem::ViewIcon => "tb.view_icon",
+        ToolbarItem::ViewDetail => "tb.view_detail",
+        ToolbarItem::Search => "tb.search",
+        ToolbarItem::EditPath => "tb.edit_path",
+        ToolbarItem::DualPane => "tb.dual",
+        ToolbarItem::SyncScroll => "tb.sync",
+        ToolbarItem::Preview => "preview.toggle",
+        ToolbarItem::Terminal => "tb.terminal",
+        ToolbarItem::MountManager => "tb.mounts",
+        ToolbarItem::Separator => "tb.separator",
+    };
+    i18n::t(key)
+}
+
 /// Build a toolbar widget row and its stateful handles from an item list.
 #[must_use]
 pub fn build(items: &[ToolbarItem], sender: &relm4::Sender<AppMsg>) -> (gtk::Box, ToolbarHandles) {
@@ -126,6 +184,22 @@ pub fn build(items: &[ToolbarItem], sender: &relm4::Sender<AppMsg>) -> (gtk::Box
         .spacing(4)
         .css_classes(["orca-toolbar"])
         .build();
+    let handles = populate(&row, items, sender);
+    (row, handles)
+}
+
+/// Clear and refill `row` from `items`, returning fresh stateful handles.
+/// Used both by [`build`] (fresh row) and by the settings page's toolbar
+/// customizer (rebuilding the live row in place).
+#[must_use]
+pub fn populate(
+    row: &gtk::Box,
+    items: &[ToolbarItem],
+    sender: &relm4::Sender<AppMsg>,
+) -> ToolbarHandles {
+    while let Some(child) = row.first_child() {
+        row.remove(&child);
+    }
     let mut handles = ToolbarHandles::default();
 
     for item in items {
@@ -236,12 +310,14 @@ pub fn build(items: &[ToolbarItem], sender: &relm4::Sender<AppMsg>) -> (gtk::Box
                 ));
             }
             ToolbarItem::MountManager => {
-                row.append(&action_button(
+                let b = action_button(
                     "drive-removable-media-symbolic",
                     &i18n::t("tb.mounts"),
                     sender,
                     AppMsg::OpenMountManager,
-                ));
+                );
+                row.append(&b);
+                handles.mount_btn = Some(b);
             }
             ToolbarItem::ViewList => {
                 let b = view_toggle(
@@ -277,7 +353,7 @@ pub fn build(items: &[ToolbarItem], sender: &relm4::Sender<AppMsg>) -> (gtk::Box
     }
     // Mark the default mode active.
     handles.set_mode(ViewMode::List);
-    (row, handles)
+    handles
 }
 
 /// Build a plain action button that emits a fixed message on click.

@@ -778,7 +778,7 @@ fn show_add_dialog(parent: &gtk::Window, sender: &ComponentSender<NetworkBrowser
     form.append(&btn_row);
 
     dialog.set_child(Some(&form));
-    dialog.present();
+    crate::anim::present_with_fade(&dialog);
 }
 
 /// Show a modal password prompt when the keyring has no stored credential.
@@ -866,7 +866,7 @@ fn show_password_dialog(
     btn_row.append(&connect_btn);
     form.append(&btn_row);
     dialog.set_child(Some(&form));
-    dialog.present();
+    crate::anim::present_with_fade(&dialog);
 }
 
 /// Build a vertical label + widget pair for dialog forms.

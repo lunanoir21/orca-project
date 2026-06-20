@@ -78,6 +78,12 @@ pub async fn list_dir(
 /// Like [`list_dir`], but checks `cancel` before each entry and aborts with
 /// [`OrcaError::Cancelled`] if cancellation was requested.
 ///
+/// Reads and stats every entry synchronously inside a single
+/// [`tokio::task::spawn_blocking`] call, rather than awaiting `tokio::fs` for
+/// each entry individually — on a 10k-entry directory the per-entry async
+/// hand-off to the blocking pool dominated wall time far more than the actual
+/// syscalls did.
+///
 /// # Errors
 /// As [`list_dir`], plus [`OrcaError::Cancelled`] when cancelled mid-listing.
 pub async fn list_dir_cancellable(
@@ -86,78 +92,43 @@ pub async fn list_dir_cancellable(
     sort: SortKey,
     cancel: &CancelToken,
 ) -> Result<Vec<FileEntry>> {
-    let path = path.as_ref();
-    let meta = tokio::fs::metadata(path)
-        .await
-        .map_err(|e| OrcaError::from_io(path, e))?;
-    if !meta.is_dir() {
-        return Err(OrcaError::NotADirectory(path.to_path_buf()));
-    }
+    let path = path.as_ref().to_path_buf();
+    let filter = filter.clone();
+    let cancel = cancel.clone();
 
-    let mut read = tokio::fs::read_dir(path)
-        .await
-        .map_err(|e| OrcaError::from_io(path, e))?;
-
-    let mut entries = Vec::new();
-    loop {
-        if cancel.is_cancelled() {
-            return Err(OrcaError::Cancelled);
+    let mut entries = tokio::task::spawn_blocking(move || -> Result<Vec<FileEntry>> {
+        let meta = std::fs::metadata(&path).map_err(|e| OrcaError::from_io(&path, e))?;
+        if !meta.is_dir() {
+            return Err(OrcaError::NotADirectory(path.clone()));
         }
-        let next = read
-            .next_entry()
-            .await
-            .map_err(|e| OrcaError::from_io(path, e))?;
-        let Some(dir_entry) = next else { break };
 
-        match build_entry(&dir_entry).await {
-            Ok(entry) => {
-                if filter.matches(&entry) {
-                    entries.push(entry);
+        let read = std::fs::read_dir(&path).map_err(|e| OrcaError::from_io(&path, e))?;
+        let mut entries = Vec::new();
+        for dir_entry in read {
+            if cancel.is_cancelled() {
+                return Err(OrcaError::Cancelled);
+            }
+            let dir_entry = dir_entry.map_err(|e| OrcaError::from_io(&path, e))?;
+            match entry_from_path(&dir_entry.path()) {
+                Ok(entry) => {
+                    if filter.matches(&entry) {
+                        entries.push(entry);
+                    }
+                }
+                Err(err) => {
+                    // Partial-results policy: a single unreadable child must
+                    // not abort the listing. Surface it in logs and continue.
+                    tracing::warn!(path = ?dir_entry.path(), error = %err, "skipping unreadable entry");
                 }
             }
-            Err(err) => {
-                // Partial-results policy: a single unreadable child must not
-                // abort the listing. Surface it in logs and continue.
-                tracing::warn!(path = ?dir_entry.path(), error = %err, "skipping unreadable entry");
-            }
         }
-    }
+        Ok(entries)
+    })
+    .await
+    .map_err(|e| OrcaError::Other(format!("spawn_blocking: {e}")))??;
 
     sort_entries(&mut entries, sort);
     Ok(entries)
-}
-
-/// Build a [`FileEntry`] from a directory entry without following symlinks.
-async fn build_entry(dir_entry: &tokio::fs::DirEntry) -> Result<FileEntry> {
-    let path = dir_entry.path();
-    let name = dir_entry.file_name().to_string_lossy().into_owned();
-    // `file_type()`/`metadata()` on a DirEntry do not traverse symlinks, so a
-    // link is reported as a link rather than its target.
-    let file_type = dir_entry
-        .file_type()
-        .await
-        .map_err(|e| OrcaError::from_io(&path, e))?;
-    let metadata = dir_entry
-        .metadata()
-        .await
-        .map_err(|e| OrcaError::from_io(&path, e))?;
-
-    let kind = FileKind::from_file_type(file_type);
-    let is_symlink = file_type.is_symlink();
-    let is_hidden = is_hidden_name(&name);
-    let modified = metadata.modified().ok();
-    let permissions = mode_bits(&metadata);
-
-    Ok(FileEntry {
-        path,
-        name,
-        size: metadata.len(),
-        modified,
-        permissions,
-        kind,
-        is_hidden,
-        is_symlink,
-    })
 }
 
 /// Build a [`FileEntry`] from a path using a non-traversing `symlink_metadata`

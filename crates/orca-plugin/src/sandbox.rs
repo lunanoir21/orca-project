@@ -8,6 +8,12 @@
 
 use mlua::{Lua, LuaOptions, StdLib};
 
+/// Hard cap on a plugin's Lua heap. mlua's default is unbounded, so without
+/// this a runaway or malicious plugin (e.g. an unbounded table-growth loop)
+/// could exhaust host memory and take Orca down with it. 64 MiB is generous
+/// for the badge/menu/exec work plugins actually do.
+const MEMORY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+
 /// Create a new sandboxed Lua 5.4 state.
 ///
 /// # Errors
@@ -17,6 +23,7 @@ pub fn create_sandbox() -> mlua::Result<Lua> {
     // Allowed: safe pure-Lua standard libraries only.
     let allowed = StdLib::STRING | StdLib::TABLE | StdLib::MATH;
     let lua = Lua::new_with(allowed, LuaOptions::default())?;
+    lua.set_memory_limit(MEMORY_LIMIT_BYTES)?;
 
     // Override `require` so plugins cannot load arbitrary modules.
     let blocked_require = lua.create_function(|_, name: String| {
@@ -66,6 +73,25 @@ mod tests {
         let lua = create_sandbox().unwrap();
         let err = lua.load("require('os')").exec().unwrap_err();
         assert!(err.to_string().contains("blocked"));
+    }
+
+    #[test]
+    fn sandbox_enforces_memory_limit() {
+        let lua = create_sandbox().unwrap();
+        // Try to grow a table well past the 64 MiB cap with long strings;
+        // mlua must abort the script with a MemoryError before it succeeds.
+        let err = lua
+            .load(
+                r#"
+                local t = {}
+                for i = 1, 1000000 do
+                    t[i] = string.rep("x", 1024)
+                end
+                "#,
+            )
+            .exec()
+            .unwrap_err();
+        assert!(matches!(err, mlua::Error::MemoryError(_)));
     }
 
     #[test]

@@ -15,6 +15,15 @@ members = [
     "crates/orca-plugin",
 ]
 
+[profile.release]
+# Standard desktop-app release tuning. Deliberately *not* `panic = "abort"`:
+# orca-vault zeroizes key material in `Drop` impls, which only run during a
+# normal unwind — aborting on panic would skip that and could leave key
+# material resident in memory longer than necessary.
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"

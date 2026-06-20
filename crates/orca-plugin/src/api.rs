@@ -147,6 +147,36 @@ pub fn register_api(
         orca.set("exec", f)?;
     }
 
+    // orca.exec_argv(program, args) → string
+    //
+    // Prefer this over `orca.exec` whenever any argument (e.g. a file path)
+    // isn't a fixed literal: `exec` runs through `sh -c`, so an attacker- or
+    // user-controlled path containing shell metacharacters can inject
+    // commands. `exec_argv` passes `args` straight to `execve` with no shell
+    // in between, so that class of injection is not possible.
+    {
+        let f = lua.create_function(move |_, (program, args): (String, Vec<String>)| {
+            exec_argv_with_timeout(&program, &args, Duration::from_secs(5))
+                .map_err(|e| mlua::Error::RuntimeError(e.to_string()))
+        })?;
+        orca.set("exec_argv", f)?;
+    }
+
+    // orca.spawn_argv(program, args) — fire-and-forget, no shell, no wait.
+    //
+    // Like `orca.open`, this does not wait for the child or capture its
+    // output — it's for launching long-running GUI processes (e.g. a
+    // sandboxed viewer) that the 5-second `exec`/`exec_argv` timeout would
+    // wrongly cut off. Best-effort: a failure to spawn is silently ignored,
+    // matching `orca.open`/`orca.notify`.
+    {
+        let f = lua.create_function(move |_, (program, args): (String, Vec<String>)| {
+            let _ = std::process::Command::new(&program).args(&args).spawn();
+            Ok(())
+        })?;
+        orca.set("spawn_argv", f)?;
+    }
+
     // orca.notify(title, body)
     {
         let f = lua.create_function(move |_, (title, body): (String, String)| {
@@ -190,6 +220,28 @@ fn exec_with_timeout(cmd: &str, timeout: Duration) -> Result<String, crate::erro
     let cmd = cmd.to_owned();
     std::thread::spawn(move || {
         let result = std::process::Command::new("sh").args(["-c", &cmd]).output();
+        let _ = tx.send(result);
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(out)) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        Ok(Err(e)) => Err(crate::error::PluginError::Exec(e.to_string())),
+        Err(_) => Err(crate::error::PluginError::Timeout),
+    }
+}
+
+/// Run `program` with `args` passed directly as an argv array (no shell) with
+/// a timeout. Returns stdout. See `orca.exec_argv` for why this exists
+/// alongside [`exec_with_timeout`].
+fn exec_argv_with_timeout(
+    program: &str,
+    args: &[String],
+    timeout: Duration,
+) -> Result<String, crate::error::PluginError> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let program = program.to_owned();
+    let args = args.to_vec();
+    std::thread::spawn(move || {
+        let result = std::process::Command::new(&program).args(&args).output();
         let _ = tx.send(result);
     });
     match rx.recv_timeout(timeout) {
@@ -321,6 +373,23 @@ mod tests {
         let badge = map.get(&PathBuf::from("/tmp/foo.rs")).unwrap();
         assert_eq!(badge.text, "M");
         assert_eq!(badge.color, "#f00");
+    }
+
+    #[test]
+    fn exec_argv_does_not_interpret_shell_metacharacters() {
+        let lua = create_sandbox().unwrap();
+        let state = make_state();
+        let badges = Arc::new(Mutex::new(BadgeMap::default()));
+        register_api(&lua, state, badges, "test".into()).unwrap();
+
+        // If this ran through a shell, "; echo pwned" would execute as a
+        // second command. With exec_argv it must come back as one literal
+        // argument, proving there is no shell in between.
+        let out: String = lua
+            .load(r#"return orca.exec_argv("/bin/echo", {"a; echo pwned"})"#)
+            .eval()
+            .unwrap();
+        assert_eq!(out.trim(), "a; echo pwned");
     }
 
     #[test]

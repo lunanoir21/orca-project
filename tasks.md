@@ -327,15 +327,15 @@
 - [x] Toggle: Space bar (preview selected file) *(F7)*
 - [x] Image preview (via `GdkPixbuf`)
 - [x] Text/code preview with syntax highlight *(monospace TextView, ≤256KiB)*
-- [~] PDF preview (first page via poppler) *(deferred — type icon shown instead)*
-- [~] Video preview (thumbnail frame via gstreamer) *(deferred — type icon shown instead)*
+- [~] PDF preview (first page via poppler) *(deferred — type icon shown instead; re-audited: no poppler dep in Cargo.toml, needs an explicit decision to add one before this can be built)*
+- [~] Video preview (thumbnail frame via gstreamer) *(deferred — type icon shown instead; re-audited: no gstreamer dep in Cargo.toml despite being listed in CLAUDE.md's tech stack — needs an explicit decision to pull it in)*
 - [x] File info sidebar (metadata, tags)
 - [x] Max preview file size configurable (default: 10 MB)
 
 ### 4.5 Thumbnail Engine
 - [x] Image thumbnails (XDG thumbnail spec: `$XDG_CACHE_HOME/thumbnails/`)
-- [~] Video thumbnails via gstreamer (extract frame at 10%) *(deferred — skipped non-image ext)*
-- [~] PDF thumbnails (first page) *(deferred)*
+- [~] Video thumbnails via gstreamer (extract frame at 10%) *(deferred — skipped non-image ext; same gstreamer-dependency blocker as the preview item above)*
+- [~] PDF thumbnails (first page) *(deferred; same poppler-dependency blocker as the preview item above)*
 - [x] Thumbnail generation async (no UI blocking)
 - [x] Thumbnail cache invalidation on file modification
 - [x] Configurable icon size (16, 24, 32, 48, 64, 96, 128 px)
@@ -381,7 +381,7 @@
 - [x] Dialog: owner, group, others — read/write/execute toggles
 - [x] Octal display updates as toggles change
 - [x] Apply recursively option (for directories)
-- [~] Change owner/group (requires appropriate privileges) *(deferred — uid/gid shown in properties)*
+- [x] Change owner/group (requires appropriate privileges) *(UID/GID fields in permissions dialog are editable; Apply runs `chown` via orca_core::set_owner, only when changed; EPERM and invalid-input surface as a human-readable dialog)*
 
 ### 5.3 Archive Operations UI
 - [x] Right-click → Compress → format picker dialog
@@ -458,7 +458,7 @@
 
 ### 6.6 Vault Backup Dialog
 - [x] Vault right-click → "Export Backup" → destination file picker
-- [~] Progress bar *(export is fast; no streaming progress API)*
+- [x] Progress bar *(indeterminate pulse via Revealer+ProgressBar while export runs; no byte-level progress API to drive a determinate bar)*
 - [x] "Import Vault" button → path picker → passphrase → import
 
 ### 6.7 Integrity Check UI
@@ -541,7 +541,7 @@
 ### 8.5 Plugin Manager UI
 - [x] List view: name, version, author, enabled toggle
 - [x] "Open plugins folder" button
-- [~] Reload button per plugin *(hot-reload wired in PluginManager::reload; UI button deferred — available via restart)*
+- [x] Reload button per plugin *(per-row reload button + enable/disable switch wired to PluginManager::reload/enable/disable; dialog refreshes via PluginManagerOutput round-trip through the shell)*
 - [x] Error state display (plugin failed to load)
 - [x] Plugin log viewer (per plugin)
 
@@ -592,7 +592,7 @@
 - [x] Attempt to access `io`, `os`, `package` from plugin — must fail *(verified by sandbox unit tests)*
 - [x] Attempt to call vault internals from plugin — must fail *(vault API not exposed to plugins)*
 - [x] Attempt to exec a shell command that exceeds timeout — must be killed *(verified by hook_timeout_fires test)*
-- [~] Attempt to allocate excessive memory from plugin — must be limited *(Lua VM memory limit not yet set; mlua default is unlimited)*
+- [x] Attempt to allocate excessive memory from plugin — must be limited *(Lua::set_memory_limit(64 MiB) set in create_sandbox; verified by sandbox_enforces_memory_limit test, expects mlua::Error::MemoryError)*
 - [x] Attempt to crash Orca via a panicking plugin — must be caught *(verified by panicking_plugin_becomes_error test)*
 
 ### 9.6 File Operation Security
@@ -640,7 +640,7 @@
 ### 10.3 Accessibility
 - [~] All interactive elements have accessible labels (`accessible_label`) *(GTK4 widgets have default accessible labels; full audit requires display)*
 - [x] Keyboard navigation works for every dialog and panel *(keyboard nav implemented throughout)*
-- [~] High contrast theme available *(5 built-in themes; high-contrast variant deferred)*
+- [x] High contrast theme available *(10 built-in schemes incl. dedicated "high-contrast": pure black/white + #ffd60a accent)*
 - [~] Screen reader test with Orca (the screen reader, not this app) *(deferred; requires display)*
 
 ### 10.4 Documentation
@@ -655,7 +655,7 @@
 - [x] Flatpak `io.github.lunanoir21.orca.yml` manifest
 - [x] AppStream metadata: `io.github.lunanoir21.orca.metainfo.xml`
 - [x] Desktop entry: `orca.desktop`
-- [~] App icons: 16, 32, 48, 64, 128, 256 px (SVG + PNG) *(deferred — requires design tooling)*
+- [~] App icons: 16, 32, 48, 64, 128, 256 px (SVG + PNG) *(deferred — requires design tooling; no icon files exist anywhere in the repo yet, packaging/orca.desktop references a name with nothing backing it)*
 
 ### 10.6 Release
 - [x] All Phase 0–9 tasks complete ✓
@@ -666,3 +666,51 @@
 - [x] Tag `v0.1.0`
 - [~] GitHub Release with binary (x86_64-unknown-linux-gnu) *(pending push to GitHub)*
 - [~] Announce on r/rust and r/linux *(pending release)*
+
+---
+
+## Phase 11 — Post-v0.1.0 UX & Hardening Pass
+
+> Driven by a direct user request to make the app genuinely usable, with a
+> reference screenshot for the home page and six follow-up features, done in
+> order. Not in the original phase plan — added here per rule 1.
+
+### 11.0 Home Page + Sidebar Visual Pass
+- [x] Personalized greeting (`home.welcome`) + subtitle, replacing the bare "Başlangıç" title
+- [x] "Hızlı İşlemler" quick-action cards: New Folder, New File, Connect to Server
+- [x] User-directory grid narrowed to 2 columns
+- [x] Drives section removed from the home page (already in the sidebar — was shown twice)
+- [x] "Son Kullanılanlar" recent-items list wired to `orca_core::get_recent` (existing API, was unused)
+- [x] Sidebar drive rows show a capacity bar (`drive_nav_row`, mirrors the old home-page drive card)
+
+### 11.1 Theme: Panel Opacity
+- [x] `panel_opacity` config field (0.3–1.0), Settings slider, scales every panel/chrome background alpha in `theme::generate_css` — interaction-feedback colors (hover/selected/borders) deliberately excluded so they stay legible at any setting
+
+### 11.2 Performance
+- [x] `list_dir_cancellable` rewritten to stat every entry inside one `spawn_blocking` (`std::fs`) instead of awaiting `tokio::fs` per entry — the per-entry async hand-off, not the syscalls, dominated wall time on large directories
+- [x] `[profile.release]`: `lto = "thin"`, `codegen-units = 1`, `strip = "symbols"` (deliberately *not* `panic = "abort"` — would skip the `Drop`-based key zeroization in `orca-vault` on panic)
+- [~] Thumbnail decode (`thumbnail.rs`) investigated for the same fix — not applicable: `GdkPixbuf`/`GdkTexture` are `!Send`, so the decode cannot move to a worker thread without unsafe; the existing `idle_add_local_once` interleaving is the correct GTK-idiomatic answer here, left unchanged
+
+### 11.3 Quick Look
+- [x] `Action::QuickLook` keybind (default `Space`), fullscreen undecorated overlay (`quicklook.rs`), closes on Escape or scrim click
+- [x] `preview::render_into` extracted so the side panel and Quick Look share one rendering path instead of duplicating it
+
+### 11.4 Vault UX (interface only — `orca-vault` crypto/backend untouched)
+- [x] Create-vault dialog: passphrase confirmation field, live strength meter, Create button disabled until valid
+- [x] Unlock dialog stays open on a wrong passphrase and shows the error inline (`dialogs::PassphrasePrompt`) instead of closing and popping a second error dialog
+- [x] Fixed hardcoded English "Cancel"/"OK" in the passphrase dialog (was bypassing i18n entirely)
+- [~] Per-row add/remove reveal animation — investigated, skipped: the vault list fully rebuilds every second for the auto-lock countdown, so a reveal-on-build animation would replay every second instead of only on real add/remove
+
+### 11.5 Plugin API Hardening + Secure Open
+- [x] `orca.exec_argv(program, args)` — argv-based, no shell, fixes a real shell-injection surface in `orca.exec`'s `sh -c` for any interpolated path
+- [x] `orca.spawn_argv(program, args)` — fire-and-forget argv exec, for launching long-running processes without the 5s `exec`/`exec_argv` timeout
+- [x] `git-status.lua` and `archive.lua` migrated from `orca.exec` to `orca.exec_argv` for every call that interpolates a file path
+- [x] `secure-open.lua` built-in plugin: "Secure Open" context item, opens the file via `bwrap` (read-only root, empty `/home`, target file re-exposed read-only, `--unshare-all`) — namespace isolation, not a hardened boundary; notifies and no-ops if `bwrap` isn't installed
+- [x] Sandbox limits documented in `SECURITY.md`
+
+### 11.6 Documentation Accuracy Pass
+- [x] README.md: removed a contradictory "this is just a demo" disclaimer, updated feature list, fixed the config example (was using fields — `theme`, no `panel_opacity`/`quick_look` — that don't match the real `Config` schema), corrected AUR/Flatpak install claims (PKGBUILD/manifest exist in-repo, not yet published), added CI/license/Rust-version badges
+- [x] `config/default.toml` rewritten to actually match `Config`'s real fields (`[appearance].theme` → `scheme` + missing fields; removed fictional `[preview]`/`[plugins]` sections that correspond to nothing in the struct) — was silently ignored at parse time before, not erroring, so the drift went unnoticed
+- [x] `docs/themes.md` rewritten — it described an entirely different (web-CSS-custom-property-based) theming architecture than the one actually implemented (`@define-color`-based runtime generation from `theme::SCHEMES`)
+- [x] Regression test (`config::tests::shipped_default_toml_matches_schema`) parses the real shipped `config/default.toml` against `Config` so this can't silently drift again
+- [x] Regression test (`manager::tests::builtin_plugins_load_without_error`) loads the real shipped `plugins/*.lua` files so a Lua syntax/registration error in a built-in plugin fails CI instead of shipping

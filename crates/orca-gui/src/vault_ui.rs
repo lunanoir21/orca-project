@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use relm4::gtk;
+use relm4::gtk::glib;
 use relm4::gtk::prelude::*;
 use relm4::{Component, ComponentParts, ComponentSender};
 
@@ -78,6 +79,9 @@ pub enum VaultPanelInput {
     },
     /// Export a backup of the named vault to a user-chosen path.
     ExportBackup(String),
+    /// Show/hide the indeterminate export progress pulse (export has no
+    /// byte-level progress API, so this just signals "work is happening").
+    SetExporting(bool),
     /// Verify the integrity of the named vault.
     VerifyIntegrity(String),
     /// Unregister the named vault (no disk delete).
@@ -115,6 +119,13 @@ pub enum VaultPanelCmd {
 pub struct VaultPanel {
     mgr: Arc<Mutex<VaultManager>>,
     list_box: gtk::ListBox,
+    progress_rev: gtk::Revealer,
+    progress_bar: gtk::ProgressBar,
+    pulse_source: Option<glib::SourceId>,
+    /// The unlock dialog currently waiting on an in-flight `DoUnlock`, if any,
+    /// so the async result can report back into the same dialog instead of
+    /// closing it and popping a second error dialog.
+    unlock_prompt: Option<(String, dialogs::PassphrasePrompt)>,
 }
 
 // ---------------------------------------------------------------------------
@@ -179,12 +190,51 @@ impl Component for VaultPanel {
         btn_row.append(&import_btn);
         root.append(&btn_row);
 
-        // Vault list
+        // Vault list. Clicking anywhere on a row (not just the small lock/menu
+        // buttons) unlocks it when locked, or navigates into it when already
+        // unlocked — GtkListBox only fires `row-activated` for clicks the
+        // row's interactive children (the toggle/menu/nav buttons) didn't
+        // already claim, so this doesn't conflict with their own handlers.
         let list_box = gtk::ListBox::new();
         list_box.set_selection_mode(gtk::SelectionMode::None);
+        {
+            let s = sender.clone();
+            let mgr = mgr.clone();
+            list_box.connect_row_activated(move |_, row| {
+                let name = row.widget_name();
+                if name.is_empty() {
+                    return;
+                }
+                let unlocked = mgr.lock().unwrap().is_unlocked(&name);
+                if unlocked {
+                    s.input(VaultPanelInput::NavigateVault(name.to_string()));
+                } else {
+                    s.input(VaultPanelInput::TryUnlock(name.to_string()));
+                }
+            });
+        }
         root.append(&list_box);
 
-        let model = VaultPanel { mgr, list_box };
+        // Indeterminate progress pulse, shown while a backup export is
+        // running (export has no byte-level progress API to drive a
+        // determinate bar — see VaultPanelInput::SetExporting).
+        let progress_bar = gtk::ProgressBar::new();
+        progress_bar.set_pulse_step(0.1);
+        let progress_rev = gtk::Revealer::builder()
+            .child(&progress_bar)
+            .reveal_child(false)
+            .transition_duration(150)
+            .build();
+        root.append(&progress_rev);
+
+        let model = VaultPanel {
+            mgr,
+            list_box,
+            progress_rev,
+            progress_bar,
+            pulse_source: None,
+            unlock_prompt: None,
+        };
 
         // Populate immediately
         model.rebuild_list(&sender);
@@ -241,12 +291,25 @@ impl Component for VaultPanel {
             VaultPanelInput::TryUnlock(name) => {
                 let s = sender.clone();
                 let n = name.clone();
-                dialogs::passphrase(parent.as_ref(), &i18n::t("vault.unlock"), move |pass| {
-                    s.input(VaultPanelInput::DoUnlock {
-                        name: n.clone(),
-                        passphrase: pass,
-                    });
+                // `passphrase()` builds and shows the dialog synchronously and
+                // hands back a handle immediately; stash it now so the async
+                // unlock result (DoUnlock's command output) can report back
+                // into this same dialog instead of popping a second one. The
+                // submit closure only needs to forward the typed passphrase —
+                // it cannot carry the (GTK, therefore `!Send`) handle through
+                // an `Input` message, since that would make `VaultPanelInput`
+                // (and so `ComponentSender<VaultPanel>`) `!Send` for the rest
+                // of the component too.
+                let prompt = dialogs::passphrase(parent.as_ref(), &i18n::t("vault.unlock"), {
+                    let n = n.clone();
+                    move |pass| {
+                        s.input(VaultPanelInput::DoUnlock {
+                            name: n.clone(),
+                            passphrase: pass,
+                        });
+                    }
                 });
+                self.unlock_prompt = Some((name, prompt));
             }
 
             VaultPanelInput::DoUnlock { name, passphrase } => {
@@ -424,6 +487,7 @@ impl Component for VaultPanel {
                     move |result| {
                         if let Ok(file) = result {
                             if let Some(dest) = file.path() {
+                                s.input(VaultPanelInput::SetExporting(true));
                                 let mgr2 = mgr.clone();
                                 let n2 = n.clone();
                                 let s2 = s.clone();
@@ -445,6 +509,22 @@ impl Component for VaultPanel {
                         }
                     },
                 );
+            }
+
+            VaultPanelInput::SetExporting(active) => {
+                self.progress_rev.set_reveal_child(active);
+                if active {
+                    let bar = self.progress_bar.clone();
+                    self.pulse_source = Some(glib::timeout_add_local(
+                        std::time::Duration::from_millis(100),
+                        move || {
+                            bar.pulse();
+                            glib::ControlFlow::Continue
+                        },
+                    ));
+                } else if let Some(id) = self.pulse_source.take() {
+                    id.remove();
+                }
             }
 
             VaultPanelInput::VerifyIntegrity(vault) => {
@@ -487,7 +567,14 @@ impl Component for VaultPanel {
         let parent = parent_window(root);
 
         match msg {
-            VaultPanelCmd::Unlocked(_name, Ok(())) => {
+            VaultPanelCmd::Unlocked(name, Ok(())) => {
+                if let Some((n, prompt)) = self.unlock_prompt.take() {
+                    if n == name {
+                        prompt.close();
+                    } else {
+                        self.unlock_prompt = Some((n, prompt));
+                    }
+                }
                 self.rebuild_list(&sender);
                 self.emit_status(&sender);
                 let configs = self.mgr.lock().unwrap().configs().to_vec();
@@ -496,7 +583,7 @@ impl Component for VaultPanel {
                     .ok();
             }
 
-            VaultPanelCmd::Unlocked(_name, Err(e)) => {
+            VaultPanelCmd::Unlocked(name, Err(e)) => {
                 // Wrong passphrase produces a MAC error from age/chacha20poly.
                 let msg = if e.to_lowercase().contains("mac")
                     || e.to_lowercase().contains("decrypt")
@@ -506,7 +593,10 @@ impl Component for VaultPanel {
                 } else {
                     i18n::tf("vault.unlock_fail", &[("err", &e)])
                 };
-                dialogs::info(parent.as_ref(), &i18n::t("vault.unlock"), &msg);
+                match &self.unlock_prompt {
+                    Some((n, prompt)) if n == &name => prompt.show_error(&msg),
+                    _ => dialogs::info(parent.as_ref(), &i18n::t("vault.unlock"), &msg),
+                }
             }
 
             VaultPanelCmd::Created(_name, Ok(())) => {
@@ -543,6 +633,7 @@ impl Component for VaultPanel {
             }
 
             VaultPanelCmd::Exported(Ok(())) => {
+                sender.input(VaultPanelInput::SetExporting(false));
                 dialogs::info(
                     parent.as_ref(),
                     &i18n::t("vault.export"),
@@ -551,6 +642,7 @@ impl Component for VaultPanel {
             }
 
             VaultPanelCmd::Exported(Err(e)) => {
+                sender.input(VaultPanelInput::SetExporting(false));
                 dialogs::info(
                     parent.as_ref(),
                     &i18n::t("vault.export"),
@@ -683,6 +775,7 @@ fn build_vault_row(
     sender: &ComponentSender<VaultPanel>,
 ) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
+    row.set_widget_name(&cfg.name);
     let outer = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
         .spacing(2)
@@ -705,7 +798,7 @@ fn build_vault_row(
             } else {
                 "channel-insecure-symbolic"
             })
-            .pixel_size(16)
+            .pixel_size(18)
             .build(),
     );
 
@@ -879,7 +972,25 @@ fn show_create_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
     let pass_entry = gtk::PasswordEntry::builder().show_peek_icon(true).build();
     vbox.append(&pass_entry);
 
-    let btn_row = dialog_buttons(&window, &i18n::t("vault.new_create"), {
+    let strength_lbl = gtk::Label::builder()
+        .halign(gtk::Align::Start)
+        .css_classes(["dim-label"])
+        .build();
+    vbox.append(&strength_lbl);
+
+    append_label(&vbox, &i18n::t("vault.passphrase_confirm"));
+    let confirm_entry = gtk::PasswordEntry::builder().show_peek_icon(true).build();
+    vbox.append(&confirm_entry);
+
+    let mismatch_lbl = gtk::Label::builder()
+        .label(i18n::t("vault.passphrase_mismatch"))
+        .halign(gtk::Align::Start)
+        .visible(false)
+        .css_classes(["error"])
+        .build();
+    vbox.append(&mismatch_lbl);
+
+    let (btn_row, create_btn) = dialog_buttons(&window, &i18n::t("vault.new_create"), {
         let ne = name_entry.clone();
         let pe = path_entry.clone();
         let pse = pass_entry.clone();
@@ -899,10 +1010,52 @@ fn show_create_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
             w.close();
         }
     });
+    create_btn.set_sensitive(false);
     vbox.append(&btn_row);
 
+    // Live validation: recompute strength/mismatch/Create-sensitivity on every
+    // keystroke in any of the four fields, instead of only finding out a
+    // passphrase typo on submit.
+    let revalidate = {
+        let ne = name_entry.clone();
+        let pe = path_entry.clone();
+        let pse = pass_entry.clone();
+        let cse = confirm_entry.clone();
+        let strength_lbl = strength_lbl.clone();
+        let mismatch_lbl = mismatch_lbl.clone();
+        let create_btn = create_btn.clone();
+        move || {
+            let pass = pse.text().to_string();
+            let confirm = cse.text().to_string();
+
+            let (label, css_class) = passphrase_strength(&pass);
+            strength_lbl.set_label(&label);
+            for class in ["dim-label", "error", "warning", "success"] {
+                strength_lbl.remove_css_class(class);
+            }
+            strength_lbl.add_css_class(css_class);
+
+            mismatch_lbl.set_visible(!pass.is_empty() && !confirm.is_empty() && pass != confirm);
+
+            let valid = !ne.text().is_empty()
+                && !pe.text().is_empty()
+                && !pass.is_empty()
+                && pass == confirm;
+            create_btn.set_sensitive(valid);
+        }
+    };
+    let revalidate = std::rc::Rc::new(revalidate);
+    for entry in [&name_entry, &path_entry] {
+        let revalidate = revalidate.clone();
+        entry.connect_changed(move |_| revalidate());
+    }
+    for entry in [&pass_entry, &confirm_entry] {
+        let revalidate = revalidate.clone();
+        entry.connect_changed(move |_| revalidate());
+    }
+
     window.set_child(Some(&vbox));
-    window.present();
+    crate::anim::present_with_fade(&window);
     name_entry.grab_focus();
 }
 
@@ -934,7 +1087,7 @@ fn show_import_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
     let pass_entry = gtk::PasswordEntry::builder().show_peek_icon(true).build();
     vbox.append(&pass_entry);
 
-    let btn_row = dialog_buttons(&window, &i18n::t("vault.import_do"), {
+    let (btn_row, _import_btn) = dialog_buttons(&window, &i18n::t("vault.import_do"), {
         let ne = name_entry.clone();
         let be = backup_entry.clone();
         let de = dest_entry.clone();
@@ -964,7 +1117,7 @@ fn show_import_dialog(parent: Option<&gtk::Window>, sender: ComponentSender<Vaul
     vbox.append(&btn_row);
 
     window.set_child(Some(&vbox));
-    window.present();
+    crate::anim::present_with_fade(&window);
 }
 
 // ---------------------------------------------------------------------------
@@ -1054,7 +1207,7 @@ fn dialog_buttons(
     window: &gtk::Window,
     confirm_label: &str,
     on_confirm: impl Fn() + 'static,
-) -> gtk::Box {
+) -> (gtk::Box, gtk::Button) {
     let row = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(8)
@@ -1072,7 +1225,35 @@ fn dialog_buttons(
     confirm.connect_clicked(move |_| on_confirm());
     row.append(&cancel);
     row.append(&confirm);
-    row
+    (row, confirm)
+}
+
+/// A simple, dependency-free passphrase strength heuristic for live feedback
+/// in the create-vault dialog. This is a UX nudge, not a security control —
+/// `orca-vault`'s Argon2id parameters (64 MiB, 3 iterations) are what
+/// actually protects a weak passphrase against brute force.
+fn passphrase_strength(pass: &str) -> (String, &'static str) {
+    if pass.is_empty() {
+        return (String::new(), "dim-label");
+    }
+    let variety = [
+        pass.chars().any(|c| c.is_ascii_lowercase()),
+        pass.chars().any(|c| c.is_ascii_uppercase()),
+        pass.chars().any(|c| c.is_ascii_digit()),
+        pass.chars().any(|c| !c.is_ascii_alphanumeric()),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    let len = pass.chars().count();
+
+    if len < 8 {
+        (i18n::t("vault.strength_weak"), "error")
+    } else if len < 12 || variety < 2 {
+        (i18n::t("vault.strength_fair"), "warning")
+    } else {
+        (i18n::t("vault.strength_strong"), "success")
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1114,4 +1295,35 @@ fn section_label(text: &str) -> gtk::Label {
         .halign(gtk::Align::Start)
         .css_classes(["orca-section-label"])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strength_empty_is_blank() {
+        let (label, class) = passphrase_strength("");
+        assert!(label.is_empty());
+        assert_eq!(class, "dim-label");
+    }
+
+    #[test]
+    fn strength_short_is_weak() {
+        let (_, class) = passphrase_strength("short1");
+        assert_eq!(class, "error");
+    }
+
+    #[test]
+    fn strength_long_single_case_is_fair() {
+        // 12+ chars but only one character class (lowercase only).
+        let (_, class) = passphrase_strength("lowercaseonly");
+        assert_eq!(class, "warning");
+    }
+
+    #[test]
+    fn strength_long_varied_is_strong() {
+        let (_, class) = passphrase_strength("Tr0ub4dor&3xtra!");
+        assert_eq!(class, "success");
+    }
 }

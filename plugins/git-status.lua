@@ -15,7 +15,10 @@ local colors = {
 }
 
 local function scan_repo(dir)
-    local out = orca.exec("git -C " .. dir .. " status --porcelain 2>/dev/null")
+    -- exec_argv (not exec): `dir` is a real filesystem path that may contain
+    -- spaces or shell metacharacters, and exec_argv passes it straight to
+    -- execve with no shell in between, so it can't be used for injection.
+    local out = orca.exec_argv("git", {"-C", dir, "status", "--porcelain"})
     if not out or out == "" then return end
 
     for line in out:gmatch("[^\n]+") do
@@ -42,8 +45,8 @@ end
 
 orca.on_dir_change(function(path)
     -- Walk up to find the git repo root so we badge all dirty files at once.
-    local root = orca.exec(
-        "git -C " .. path .. " rev-parse --show-toplevel 2>/dev/null"
+    local root = orca.exec_argv(
+        "git", {"-C", path, "rev-parse", "--show-toplevel"}
     ):gsub("%s+$", "")
     if root and root ~= "" then
         scan_repo(root)

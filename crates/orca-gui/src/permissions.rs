@@ -15,6 +15,7 @@ use relm4::{Component, ComponentParts, ComponentSender};
 
 use orca_core::FileKind;
 
+use crate::dialogs;
 use crate::i18n;
 
 /// Dialog init: the entry to edit.
@@ -43,12 +44,13 @@ pub struct PermissionsDialog {
     octal_lbl: gtk::Label,
     /// Recursive toggle.
     recursive: Rc<Cell<bool>>,
-    /// UID entry (read-only display of the file owner).
-    #[allow(dead_code)]
+    /// UID entry — editable; only applied if it differs from `orig_uid`.
     uid_entry: gtk::Entry,
-    /// GID entry (read-only display of the file group).
-    #[allow(dead_code)]
+    /// GID entry — editable; only applied if it differs from `orig_gid`.
     gid_entry: gtk::Entry,
+    /// Owner/group at dialog-open time, to detect whether the user changed them.
+    orig_uid: u32,
+    orig_gid: u32,
 }
 
 /// Input messages.
@@ -168,7 +170,12 @@ impl Component for PermissionsDialog {
         octal_row.append(&octal_lbl);
         outer.append(&octal_row);
 
-        // --- Ownership display (read-only: uid / gid) ---
+        // --- Ownership (editable: uid / gid, applied via `chown` on Apply) ---
+        let own_hdr = gtk::Label::new(Some(&i18n::t("perms.owner_group")));
+        own_hdr.add_css_class("dim-label");
+        own_hdr.set_halign(gtk::Align::Start);
+        outer.append(&own_hdr);
+
         let own_row = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(12)
@@ -180,7 +187,7 @@ impl Component for PermissionsDialog {
         uid_lbl.add_css_class("dim-label");
         let uid_entry = gtk::Entry::builder()
             .text(init.uid.to_string().as_str())
-            .editable(false)
+            .input_purpose(gtk::InputPurpose::Digits)
             .width_chars(8)
             .build();
         let gid_lbl = gtk::Label::builder()
@@ -190,7 +197,7 @@ impl Component for PermissionsDialog {
         gid_lbl.add_css_class("dim-label");
         let gid_entry = gtk::Entry::builder()
             .text(init.gid.to_string().as_str())
-            .editable(false)
+            .input_purpose(gtk::InputPurpose::Digits)
             .width_chars(8)
             .build();
         own_row.append(&uid_lbl);
@@ -239,6 +246,8 @@ impl Component for PermissionsDialog {
             recursive,
             uid_entry,
             gid_entry,
+            orig_uid: init.uid,
+            orig_gid: init.gid,
         };
         ComponentParts { model, widgets }
     }
@@ -249,6 +258,23 @@ impl Component for PermissionsDialog {
                 self.octal_lbl.set_label(&format_octal(&self.bits));
             }
             PermsInput::Apply => {
+                let (uid, gid) = match (
+                    self.uid_entry.text().parse::<u32>(),
+                    self.gid_entry.text().parse::<u32>(),
+                ) {
+                    (Ok(u), Ok(g)) => (u, g),
+                    _ => {
+                        dialogs::info(
+                            Some(root),
+                            &i18n::t("perms.title"),
+                            &i18n::t("perms.invalid_owner"),
+                        );
+                        return;
+                    }
+                };
+                let owner_change =
+                    (uid != self.orig_uid || gid != self.orig_gid).then_some((uid, gid));
+
                 let mode = bits_to_mode(&self.bits);
                 let path = self.path.clone();
                 let recursive = self.recursive.get();
@@ -261,9 +287,14 @@ impl Component for PermissionsDialog {
                             .await
                             .map_err(|e| e.to_string())
                     };
+                    let result = match (result, owner_change) {
+                        (Ok(()), Some((uid, gid))) => orca_core::set_owner(&path, uid, gid)
+                            .await
+                            .map_err(|e| e.to_string()),
+                        (r, _) => r,
+                    };
                     PermsCmd::Done(result)
                 });
-                root.close();
             }
         }
     }
@@ -272,10 +303,18 @@ impl Component for PermissionsDialog {
         &mut self,
         msg: Self::CommandOutput,
         _sender: ComponentSender<Self>,
-        _root: &Self::Root,
+        root: &Self::Root,
     ) {
-        if let PermsCmd::Done(Err(e)) = msg {
-            tracing::warn!(error = %e, "set permissions failed");
+        match msg {
+            PermsCmd::Done(Ok(())) => root.close(),
+            PermsCmd::Done(Err(e)) => {
+                tracing::warn!(error = %e, "set permissions failed");
+                dialogs::info(
+                    Some(root),
+                    &i18n::t("perms.title"),
+                    &i18n::tf("perms.fail", &[("err", &e)]),
+                );
+            }
         }
     }
 }

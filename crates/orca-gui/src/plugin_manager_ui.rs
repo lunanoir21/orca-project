@@ -15,21 +15,41 @@ use crate::i18n;
 /// Input: snapshot list from the live [`orca_plugin::PluginManager`].
 pub type PluginManagerInit = Vec<PluginInfo>;
 
-/// Dialog model.
-pub struct PluginManagerDialog;
+/// Dialog model. Keeps the list box around so [`PluginManagerInput::Refresh`]
+/// can rebuild rows in place after a toggle/reload changes backend state.
+pub struct PluginManagerDialog {
+    list_box: Option<gtk::ListBox>,
+}
 
 /// Messages the dialog handles.
 #[derive(Debug)]
 pub enum PluginManagerInput {
     /// User pressed "Open plugins folder".
     OpenFolder,
+    /// User flipped a plugin's enable switch.
+    Toggle(String, bool),
+    /// User pressed the reload button on a plugin row.
+    Reload(String),
+    /// The shell pushed a fresh snapshot after handling a `Toggle`/`Reload`
+    /// output (the dialog has no direct access to the live `PluginManager`).
+    Refresh(Vec<PluginInfo>),
+}
+
+/// What the dialog reports to the application shell, which owns the live
+/// `PluginManager` and is the only thing allowed to mutate it.
+#[derive(Debug)]
+pub enum PluginManagerOutput {
+    /// Enable (`true`) or disable (`false`) the named plugin.
+    Toggle(String, bool),
+    /// Hot-reload the named plugin.
+    Reload(String),
 }
 
 #[relm4::component(pub)]
 impl Component for PluginManagerDialog {
     type Init = PluginManagerInit;
     type Input = PluginManagerInput;
-    type Output = ();
+    type Output = PluginManagerOutput;
     type CommandOutput = ();
 
     view! {
@@ -58,6 +78,7 @@ impl Component for PluginManagerDialog {
             .margin_end(12)
             .build();
 
+        let mut list_box = None;
         if plugins.is_empty() {
             let lbl = gtk::Label::builder()
                 .label(i18n::t("plugin.no_plugins"))
@@ -71,17 +92,18 @@ impl Component for PluginManagerDialog {
                 .vexpand(true)
                 .hscrollbar_policy(gtk::PolicyType::Never)
                 .build();
-            let list_box = gtk::ListBox::builder()
+            let lb = gtk::ListBox::builder()
                 .selection_mode(gtk::SelectionMode::None)
                 .build();
-            list_box.add_css_class("boxed-list");
+            lb.add_css_class("boxed-list");
 
             for info in &plugins {
-                list_box.append(&build_plugin_row(info));
+                lb.append(&build_plugin_row(info, &sender));
             }
 
-            scroll.set_child(Some(&list_box));
+            scroll.set_child(Some(&lb));
             outer.append(&scroll);
+            list_box = Some(lb);
         }
 
         // Bottom button row
@@ -110,11 +132,11 @@ impl Component for PluginManagerDialog {
 
         root.set_child(Some(&outer));
 
-        let model = PluginManagerDialog;
+        let model = PluginManagerDialog { list_box };
         ComponentParts { model, widgets }
     }
 
-    fn update(&mut self, msg: Self::Input, _sender: ComponentSender<Self>, _root: &Self::Root) {
+    fn update(&mut self, msg: Self::Input, sender: ComponentSender<Self>, _root: &Self::Root) {
         match msg {
             PluginManagerInput::OpenFolder => {
                 let plugins_dir = dirs::data_dir()
@@ -124,12 +146,32 @@ impl Component for PluginManagerDialog {
                     .arg(&plugins_dir)
                     .spawn();
             }
+            PluginManagerInput::Toggle(id, on) => {
+                sender.output(PluginManagerOutput::Toggle(id, on)).ok();
+            }
+            PluginManagerInput::Reload(id) => {
+                sender.output(PluginManagerOutput::Reload(id)).ok();
+            }
+            PluginManagerInput::Refresh(plugins) => {
+                let Some(list_box) = &self.list_box else {
+                    return;
+                };
+                while let Some(child) = list_box.first_child() {
+                    list_box.remove(&child);
+                }
+                for info in &plugins {
+                    list_box.append(&build_plugin_row(info, &sender));
+                }
+            }
         }
     }
 }
 
 /// Build a single plugin row widget.
-fn build_plugin_row(info: &PluginInfo) -> gtk::ListBoxRow {
+fn build_plugin_row(
+    info: &PluginInfo,
+    sender: &ComponentSender<PluginManagerDialog>,
+) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
     row.set_activatable(false);
 
@@ -142,7 +184,7 @@ fn build_plugin_row(info: &PluginInfo) -> gtk::ListBoxRow {
         .margin_end(10)
         .build();
 
-    // Header: name + version + state badge
+    // Header: name + version + reload button + enable switch + state badge
     let header = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(8)
@@ -155,6 +197,36 @@ fn build_plugin_row(info: &PluginInfo) -> gtk::ListBoxRow {
         .build();
     name_lbl.add_css_class("heading");
     header.append(&name_lbl);
+
+    let reload_btn = gtk::Button::builder()
+        .icon_name("view-refresh-symbolic")
+        .has_frame(false)
+        .tooltip_text(i18n::t("plugin.reload"))
+        .build();
+    {
+        let s = sender.clone();
+        let id = info.id.clone();
+        reload_btn.connect_clicked(move |_| s.input(PluginManagerInput::Reload(id.clone())));
+    }
+    header.append(&reload_btn);
+
+    let enabled_switch = gtk::Switch::builder()
+        .active(info.state == PluginState::Enabled)
+        .valign(gtk::Align::Center)
+        .tooltip_text(i18n::t("plugin.enabled"))
+        .build();
+    // A plugin stuck in an error state can't be flipped back to enabled from
+    // here — it needs a successful reload first.
+    enabled_switch.set_sensitive(!matches!(info.state, PluginState::Error(_)));
+    {
+        let s = sender.clone();
+        let id = info.id.clone();
+        enabled_switch.connect_state_set(move |_, on| {
+            s.input(PluginManagerInput::Toggle(id.clone(), on));
+            gtk::glib::Propagation::Proceed
+        });
+    }
+    header.append(&enabled_switch);
 
     let state_lbl = gtk::Label::builder()
         .label(state_label(&info.state))

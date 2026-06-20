@@ -5,7 +5,9 @@
 //! language. The page owns no configuration: each change is emitted as a
 //! [`SettingsOutput`] so the application applies and persists it.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use relm4::gtk;
 use relm4::gtk::prelude::*;
@@ -15,6 +17,7 @@ use crate::config::Keybinds;
 use crate::i18n::{self, Lang};
 use crate::keybind::{Action, KeyCombo};
 use crate::theme;
+use crate::toolbar::{self, ToolbarItem};
 
 /// Initial values to seed the controls from the current config.
 #[derive(Debug, Clone)]
@@ -25,6 +28,8 @@ pub struct SettingsInit {
     pub accent: String,
     /// Background scrim strength, 0.0–1.0.
     pub dim: f64,
+    /// Panel/chrome background opacity multiplier, 0.3–1.0.
+    pub panel_opacity: f64,
     /// UI / list font (Pango description).
     pub font: String,
     /// Show dot-prefixed hidden files.
@@ -43,6 +48,14 @@ pub struct SettingsInit {
     pub terminal_shell: String,
     /// Font for the embedded terminal (Pango description).
     pub terminal_font: String,
+    /// Page shown on launch (`"files"` or `"home"`).
+    pub start_page: String,
+    /// Current toolbar layout (which items are shown, in what order).
+    pub toolbar_items: Vec<ToolbarItem>,
+    /// Whether the toolbar row is currently shown.
+    pub toolbar_visible: bool,
+    /// Whether the breadcrumb/path bar is currently shown.
+    pub breadcrumb_visible: bool,
 }
 
 /// The settings page emits no internal messages.
@@ -63,6 +76,8 @@ pub enum SettingsOutput {
     SetBackground(Option<PathBuf>),
     /// Change the background scrim strength.
     SetDim(f64),
+    /// Change the panel/chrome background opacity multiplier.
+    SetPanelOpacity(f64),
     /// Change the UI / list font (Pango description).
     SetFont(String),
     /// Toggle hidden-file visibility.
@@ -73,6 +88,8 @@ pub enum SettingsOutput {
     SetConfirmDelete(bool),
     /// Change the default view mode id for new panes.
     SetDefaultView(String),
+    /// Change the page shown on launch (`"files"` or `"home"`).
+    SetStartPage(String),
     /// Change the interface language.
     SetLanguage(Lang),
     /// Update one keybind: (config_key, new_binding_string).
@@ -81,6 +98,13 @@ pub enum SettingsOutput {
     SetTerminalShell(String),
     /// Update the terminal font.
     SetTerminalFont(String),
+    /// Replace the toolbar layout (items + order; hidden items are simply
+    /// absent from the vec).
+    SetToolbarItems(Vec<ToolbarItem>),
+    /// Toggle the toolbar row.
+    SetToolbarVisible(bool),
+    /// Toggle the breadcrumb/path bar.
+    SetBreadcrumbVisible(bool),
     /// Reset all settings to defaults.
     ResetDefaults,
 }
@@ -92,15 +116,16 @@ impl SimpleComponent for SettingsPage {
     type Init = SettingsInit;
     type Input = SettingsInput;
     type Output = SettingsOutput;
-    type Root = gtk::ScrolledWindow;
+    type Root = gtk::Box;
     type Widgets = ();
 
     fn init_root() -> Self::Root {
-        gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
+        gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(14)
             .vexpand(true)
             .hexpand(true)
-            .css_classes(["orca-home-scroll"])
+            .css_classes(["orca-home"])
             .build()
     }
 
@@ -109,13 +134,7 @@ impl SimpleComponent for SettingsPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
-        let content = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(14)
-            .css_classes(["orca-home"])
-            .build();
-
-        content.append(
+        root.append(
             &gtk::Label::builder()
                 .label(i18n::t("settings.title"))
                 .halign(gtk::Align::Start)
@@ -123,40 +142,18 @@ impl SimpleComponent for SettingsPage {
                 .build(),
         );
 
-        // Appearance.
-        content.append(&section_label(&i18n::t("home.appearance")));
-        content.append(&scheme_row(&init, &sender));
-        content.append(&accent_row(&init, &sender));
-        content.append(&font_row(&init, &sender));
-        content.append(&background_row(&sender));
-        content.append(&dim_row(&init, &sender));
-
-        // Behaviour.
-        content.append(&section_label(&i18n::t("home.behaviour")));
-        content.append(&switch_row(
-            &i18n::t("set.show_hidden"),
-            init.show_hidden,
-            &sender,
-            SettingsOutput::SetShowHidden,
-        ));
-        content.append(&switch_row(
-            &i18n::t("set.single_click"),
-            init.single_click,
-            &sender,
-            SettingsOutput::SetSingleClick,
-        ));
-        content.append(&switch_row(
-            &i18n::t("set.confirm_delete"),
-            init.confirm_delete,
-            &sender,
-            SettingsOutput::SetConfirmDelete,
-        ));
-        content.append(&default_view_row(&init, &sender));
-
-        // Language.
-        content.append(&section_label(&i18n::t("home.language")));
-        content.append(&language_row(&init, &sender));
-        content.append(
+        // Appearance (+ language, which is a display setting too).
+        let appearance_page = category_page();
+        appearance_page.append(&section_label(&i18n::t("home.appearance")));
+        appearance_page.append(&scheme_row(&init, &sender));
+        appearance_page.append(&accent_row(&init, &sender));
+        appearance_page.append(&font_row(&init, &sender));
+        appearance_page.append(&background_row(&sender));
+        appearance_page.append(&dim_row(&init, &sender));
+        appearance_page.append(&panel_opacity_row(&init, &sender));
+        appearance_page.append(&section_label(&i18n::t("home.language")));
+        appearance_page.append(&language_row(&init, &sender));
+        appearance_page.append(
             &gtk::Label::builder()
                 .label(i18n::t("home.lang_restart"))
                 .wrap(true)
@@ -165,14 +162,126 @@ impl SimpleComponent for SettingsPage {
                 .build(),
         );
 
+        // Behaviour.
+        let behaviour_page = category_page();
+        behaviour_page.append(&switch_row(
+            &i18n::t("set.show_hidden"),
+            init.show_hidden,
+            &sender,
+            SettingsOutput::SetShowHidden,
+        ));
+        behaviour_page.append(&switch_row(
+            &i18n::t("set.single_click"),
+            init.single_click,
+            &sender,
+            SettingsOutput::SetSingleClick,
+        ));
+        behaviour_page.append(&switch_row(
+            &i18n::t("set.confirm_delete"),
+            init.confirm_delete,
+            &sender,
+            SettingsOutput::SetConfirmDelete,
+        ));
+        behaviour_page.append(&default_view_row(&init, &sender));
+        behaviour_page.append(&start_page_row(&init, &sender));
+
         // Keybinds.
-        content.append(&section_label(&i18n::t("set.keybinds")));
-        content.append(&keybinds_grid(&init, &sender));
+        let keybinds_page = category_page();
+        keybinds_page.append(&keybinds_grid(&init, &sender));
 
         // Terminal.
-        content.append(&section_label(&i18n::t("set.terminal")));
-        content.append(&terminal_shell_row(&init, &sender));
-        content.append(&terminal_font_row(&init, &sender));
+        let terminal_page = category_page();
+        terminal_page.append(&terminal_shell_row(&init, &sender));
+        terminal_page.append(&terminal_font_row(&init, &sender));
+
+        // Toolbar.
+        let toolbar_page = category_page();
+        toolbar_page.append(&switch_row(
+            &i18n::t("set.show_toolbar"),
+            init.toolbar_visible,
+            &sender,
+            SettingsOutput::SetToolbarVisible,
+        ));
+        toolbar_page.append(&switch_row(
+            &i18n::t("set.show_breadcrumb"),
+            init.breadcrumb_visible,
+            &sender,
+            SettingsOutput::SetBreadcrumbVisible,
+        ));
+        toolbar_page.append(&toolbar_list(&init, &sender));
+
+        let stack = gtk::Stack::new();
+        stack.set_hexpand(true);
+        stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        stack.set_transition_duration(150);
+        stack.add_named(&appearance_page, Some("appearance"));
+        stack.add_named(&behaviour_page, Some("behaviour"));
+        stack.add_named(&keybinds_page, Some("keybinds"));
+        stack.add_named(&terminal_page, Some("terminal"));
+        stack.add_named(&toolbar_page, Some("toolbar"));
+        stack.set_visible_child_name("appearance");
+
+        // Category nav (left): a vertical radio group of icon+label toggles,
+        // mirroring places.rs's row_button visual language.
+        let nav = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(2)
+            .width_request(180)
+            .css_classes(["orca-settings-nav"])
+            .build();
+        let categories: [(&str, &str, &str); 5] = [
+            (
+                "appearance",
+                "set.cat_appearance",
+                "preferences-desktop-theme-symbolic",
+            ),
+            (
+                "behaviour",
+                "set.cat_behaviour",
+                "preferences-system-symbolic",
+            ),
+            ("keybinds", "set.cat_keybinds", "input-keyboard-symbolic"),
+            (
+                "terminal",
+                "set.cat_terminal",
+                "utilities-terminal-symbolic",
+            ),
+            ("toolbar", "set.cat_toolbar", "view-grid-symbolic"),
+        ];
+        let mut first_btn: Option<gtk::ToggleButton> = None;
+        for (id, label_key, icon) in categories {
+            let btn = category_nav_button(icon, &i18n::t(label_key));
+            if let Some(leader) = &first_btn {
+                btn.set_group(Some(leader));
+            } else {
+                btn.set_active(true);
+                first_btn = Some(btn.clone());
+            }
+            let stack = stack.clone();
+            btn.connect_toggled(move |b| {
+                if b.is_active() {
+                    stack.set_visible_child_name(id);
+                }
+            });
+            nav.append(&btn);
+        }
+
+        let scroll = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .hexpand(true)
+            .css_classes(["orca-home-scroll"])
+            .child(&stack)
+            .build();
+
+        let split = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(0)
+            .vexpand(true)
+            .build();
+        split.append(&nav);
+        split.append(&scroll);
+        root.append(&split);
 
         // Reset.
         let reset_btn = gtk::Button::builder()
@@ -186,9 +295,8 @@ impl SimpleComponent for SettingsPage {
                 sender.output(SettingsOutput::ResetDefaults).ok();
             });
         }
-        content.append(&reset_btn);
+        root.append(&reset_btn);
 
-        root.set_child(Some(&content));
         ComponentParts {
             model: SettingsPage,
             widgets: (),
@@ -198,6 +306,65 @@ impl SimpleComponent for SettingsPage {
     fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
         match message {}
     }
+}
+
+/// A vertical content box for one settings category page.
+fn category_page() -> gtk::Box {
+    gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(14)
+        .margin_start(16)
+        .margin_end(8)
+        .margin_top(4)
+        .build()
+}
+
+/// A category nav button: icon + label, toggleable (joined into a radio
+/// group by the caller so exactly one category is shown at a time).
+fn category_nav_button(icon: &str, label: &str) -> gtk::ToggleButton {
+    let row = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(10)
+        .build();
+    row.append(&gtk::Image::builder().icon_name(icon).pixel_size(18).build());
+    row.append(
+        &gtk::Label::builder()
+            .label(label)
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build(),
+    );
+    gtk::ToggleButton::builder()
+        .child(&row)
+        .has_frame(false)
+        .css_classes(["orca-settings-cat"])
+        .build()
+}
+
+/// Start-page dropdown (Files / Home).
+fn start_page_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) -> gtk::Box {
+    let row = labelled_row(&i18n::t("set.start_page"));
+    let ids = ["files", "home"];
+    let names: Vec<String> = ids
+        .iter()
+        .map(|id| i18n::t(&format!("set.start_page_{id}")))
+        .collect();
+    let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+    let dropdown = gtk::DropDown::from_strings(&refs);
+    if let Some(idx) = ids.iter().position(|id| *id == init.start_page) {
+        dropdown.set_selected(idx as u32);
+    }
+    let sender = sender.clone();
+    dropdown.connect_selected_notify(move |d| {
+        if let Some(id) = ids.get(d.selected() as usize) {
+            sender
+                .output(SettingsOutput::SetStartPage((*id).to_owned()))
+                .ok();
+        }
+    });
+    row.append(&dropdown);
+    row
 }
 
 /// A section heading label.
@@ -377,6 +544,23 @@ fn dim_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) -> gtk::
     row
 }
 
+/// Panel/chrome background opacity slider (sidebar, toolbar, preview, ...).
+fn panel_opacity_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) -> gtk::Box {
+    let row = labelled_row(&i18n::t("settings.panel_opacity"));
+    let scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.3, 1.0, 0.05);
+    scale.set_value(init.panel_opacity);
+    scale.set_hexpand(true);
+    scale.set_size_request(180, -1);
+    let sender = sender.clone();
+    scale.connect_value_changed(move |s| {
+        sender
+            .output(SettingsOutput::SetPanelOpacity(s.value()))
+            .ok();
+    });
+    row.append(&scale);
+    row
+}
+
 /// Language radio buttons.
 fn language_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) -> gtk::Box {
     let row = gtk::Box::builder()
@@ -508,6 +692,7 @@ fn keybind_str_for(action: Action, kb: &Keybinds) -> String {
         Action::ViewIcon => kb.view_icon.clone(),
         Action::ViewDetail => kb.view_detail.clone(),
         Action::VaultAdd => kb.vault_add.clone(),
+        Action::QuickLook => kb.quick_look.clone(),
     }
 }
 
@@ -574,7 +759,7 @@ fn capture_key(
         gtk::glib::Propagation::Stop
     });
     dialog.add_controller(key_ctrl);
-    dialog.present();
+    crate::anim::present_with_fade(&dialog);
 }
 
 /// Terminal shell path entry row.
@@ -615,6 +800,144 @@ fn terminal_font_row(init: &SettingsInit, sender: &ComponentSender<SettingsPage>
     });
     row.append(&button);
     row
+}
+
+/// Toolbar customizer: every known item, in the user's current order (any
+/// item missing from their config — e.g. a fresh install — is appended at
+/// the end), each with a visibility checkbox and ▲▼ reorder buttons.
+///
+/// Hidden items stay in this list (so they can be re-enabled later); only
+/// the checked ones, in order, are emitted as the new toolbar layout.
+/// Separators are not user-customizable — re-enabling a hidden item or
+/// reordering drops them, which is an accepted simplification.
+fn toolbar_list(init: &SettingsInit, sender: &ComponentSender<SettingsPage>) -> gtk::Box {
+    let wrap = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(4)
+        .build();
+
+    let visible_now: Vec<ToolbarItem> = init
+        .toolbar_items
+        .iter()
+        .copied()
+        .filter(|i| *i != ToolbarItem::Separator)
+        .collect();
+    let mut ordered = visible_now.clone();
+    for item in toolbar::all_items() {
+        if !ordered.contains(item) {
+            ordered.push(*item);
+        }
+    }
+
+    let state: Rc<RefCell<Vec<(ToolbarItem, bool)>>> = Rc::new(RefCell::new(
+        ordered
+            .into_iter()
+            .map(|i| (i, visible_now.contains(&i)))
+            .collect(),
+    ));
+
+    let list_box = gtk::ListBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .css_classes(["boxed-list"])
+        .build();
+    wrap.append(&list_box);
+
+    rebuild_toolbar_rows(&list_box, &state, sender);
+    wrap
+}
+
+/// Emit the currently-checked items, in order, as the new toolbar layout.
+fn emit_toolbar_items(
+    state: &Rc<RefCell<Vec<(ToolbarItem, bool)>>>,
+    sender: &ComponentSender<SettingsPage>,
+) {
+    let items: Vec<ToolbarItem> = state
+        .borrow()
+        .iter()
+        .filter(|(_, visible)| *visible)
+        .map(|(item, _)| *item)
+        .collect();
+    sender.output(SettingsOutput::SetToolbarItems(items)).ok();
+}
+
+/// Clear and rebuild the toolbar customizer rows from `state`.
+fn rebuild_toolbar_rows(
+    list_box: &gtk::ListBox,
+    state: &Rc<RefCell<Vec<(ToolbarItem, bool)>>>,
+    sender: &ComponentSender<SettingsPage>,
+) {
+    while let Some(child) = list_box.first_child() {
+        list_box.remove(&child);
+    }
+
+    let len = state.borrow().len();
+    for idx in 0..len {
+        let (item, visible) = state.borrow()[idx];
+
+        let row = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(8)
+            .margin_top(4)
+            .margin_bottom(4)
+            .margin_start(8)
+            .margin_end(8)
+            .build();
+
+        let check = gtk::CheckButton::new();
+        check.set_active(visible);
+        {
+            let state = state.clone();
+            let sender = sender.clone();
+            check.connect_toggled(move |b| {
+                state.borrow_mut()[idx].1 = b.is_active();
+                emit_toolbar_items(&state, &sender);
+            });
+        }
+        row.append(&check);
+
+        let label = gtk::Label::builder()
+            .label(toolbar::item_label(item))
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .build();
+        row.append(&label);
+
+        let up_btn = gtk::Button::builder()
+            .icon_name("go-up-symbolic")
+            .has_frame(false)
+            .sensitive(idx > 0)
+            .build();
+        {
+            let state = state.clone();
+            let sender = sender.clone();
+            let list_box = list_box.clone();
+            up_btn.connect_clicked(move |_| {
+                state.borrow_mut().swap(idx, idx - 1);
+                rebuild_toolbar_rows(&list_box, &state, &sender);
+                emit_toolbar_items(&state, &sender);
+            });
+        }
+        row.append(&up_btn);
+
+        let down_btn = gtk::Button::builder()
+            .icon_name("go-down-symbolic")
+            .has_frame(false)
+            .sensitive(idx + 1 < len)
+            .build();
+        {
+            let state = state.clone();
+            let sender = sender.clone();
+            let list_box = list_box.clone();
+            down_btn.connect_clicked(move |_| {
+                state.borrow_mut().swap(idx, idx + 1);
+                rebuild_toolbar_rows(&list_box, &state, &sender);
+                emit_toolbar_items(&state, &sender);
+            });
+        }
+        row.append(&down_btn);
+
+        list_box.append(&row);
+    }
 }
 
 /// Format an opaque `RGBA` as `#rrggbb`.

@@ -126,6 +126,15 @@ pub const SCHEMES: &[Scheme] = &[
         subtext: "#6272a4",
         accent: "#bd93f9",
     },
+    Scheme {
+        id: "high-contrast",
+        name: "Yüksek Kontrast",
+        bg: "#000000",
+        surface: "#1a1a1a",
+        text: "#ffffff",
+        subtext: "#d6d6d6",
+        accent: "#ffd60a",
+    },
 ];
 
 impl Scheme {
@@ -178,12 +187,22 @@ pub fn load(themes_dir: &Path) {
 }
 
 /// Regenerate and apply the color CSS from the active scheme, an optional accent
-/// override (hex like `#rrggbb`), an optional background image and the scrim
-/// `dim` (0.0–1.0) drawn over that image.
-pub fn apply(scheme_id: &str, accent: Option<&str>, image: Option<&Path>, dim: f64, font: &str) {
+/// override (hex like `#rrggbb`), an optional background image, the scrim
+/// `dim` (0.0–1.0) drawn over that image, and a `panel_opacity` (0.0–1.0)
+/// multiplier applied to every panel/chrome background alpha (sidebar,
+/// toolbar, preview, status bar, ...) so the user can make the whole shell
+/// more see-through without touching per-widget CSS.
+pub fn apply(
+    scheme_id: &str,
+    accent: Option<&str>,
+    image: Option<&Path>,
+    dim: f64,
+    panel_opacity: f64,
+    font: &str,
+) {
     let s = scheme(scheme_id);
     let accent = accent.filter(|a| !a.is_empty()).unwrap_or(s.accent);
-    let css = generate_css(s, accent, image, dim, font);
+    let css = generate_css(s, accent, image, dim, panel_opacity, font);
     COLOR_PROVIDER.with(|p| {
         if let Some(provider) = p.borrow().as_ref() {
             provider.load_from_string(&css);
@@ -192,7 +211,24 @@ pub fn apply(scheme_id: &str, accent: Option<&str>, image: Option<&Path>, dim: f
 }
 
 /// Build the full color stylesheet for the given palette.
-fn generate_css(s: &Scheme, accent: &str, image: Option<&Path>, dim: f64, font: &str) -> String {
+fn generate_css(
+    s: &Scheme,
+    accent: &str,
+    image: Option<&Path>,
+    dim: f64,
+    panel_opacity: f64,
+    font: &str,
+) -> String {
+    // Panel/chrome background alphas all scale by the same user-controlled
+    // multiplier; interaction-feedback colors (hover/active/selected/borders)
+    // are left alone so they stay legible at any opacity setting.
+    let p = |base: f64| (base * panel_opacity).clamp(0.05, 1.0);
+    let chrome_bg = p(0.72);
+    let panel_bg = p(0.86);
+    let preview_text_bg = p(0.55);
+    let list_bg = p(0.82);
+    let popover_bg = p(0.97);
+    let statusbar_bg = p(0.50);
     // The window rule carries either a flat background or the dimmed image.
     let window_bg = match image {
         Some(path) => {
@@ -226,22 +262,36 @@ fn generate_css(s: &Scheme, accent: &str, image: Option<&Path>, dim: f64, font: 
          window.orca-root {{ {window_bg} color: @orca_text; {font_css} }}\n\
          window.orca-root > box, window.orca-root > box > box,\n\
          .orca-home, .orca-home-scroll, .orca-home-scroll > viewport {{ background: transparent; }}\n\
-         window.orca-root headerbar {{ background: alpha(@orca_surface, 0.72); color: @orca_text; border: none; box-shadow: none; min-height: 40px; }}\n\
+         window.orca-root headerbar {{ background: alpha(@orca_surface, {chrome_bg}); color: @orca_text; border: none; box-shadow: none; min-height: 40px; }}\n\
          window.orca-root headerbar label {{ font-weight: 600; }}\n\
-         .orca-places {{ background: alpha(@orca_bg, 0.86); border-right: 1px solid alpha(@orca_text, 0.06); }}\n\
-         .orca-preview {{ background: alpha(@orca_bg, 0.86); border-left: 1px solid alpha(@orca_text, 0.06); }}\n\
+         .orca-places {{ background: alpha(@orca_bg, {panel_bg}); border-right: 1px solid alpha(@orca_text, 0.06); }}\n\
+         .orca-preview {{ background: alpha(@orca_bg, {panel_bg}); border-left: 1px solid alpha(@orca_text, 0.06); }}\n\
          .orca-terminal {{ border-top: 1px solid alpha(@orca_text, 0.10); }}\n\
-         .orca-preview-text {{ background: alpha(@orca_bg, 0.55); }}\n\
+         .orca-preview-text {{ background: alpha(@orca_bg, {preview_text_bg}); }}\n\
          .orca-preview-text text {{ background: transparent; color: @orca_text; }}\n\
          .orca-place {{ color: alpha(@orca_text, 0.82); background: transparent; box-shadow: none; border: none; }}\n\
          .orca-place:hover {{ background: alpha(@orca_text, 0.08); color: @orca_text; }}\n\
          .orca-place:active {{ background: alpha(@orca_accent, 0.22); }}\n\
          .orca-place image {{ color: alpha(@orca_text, 0.70); }}\n\
-         .orca-toolbar {{ background: alpha(@orca_surface, 0.50); border-bottom: 1px solid alpha(@orca_text, 0.06); }}\n\
+         .orca-settings-nav {{ border-right: 1px solid alpha(@orca_text, 0.06); }}\n\
+         .orca-settings-cat {{ color: alpha(@orca_text, 0.78); background: transparent; }}\n\
+         .orca-settings-cat:hover {{ background: alpha(@orca_text, 0.08); color: @orca_text; }}\n\
+         .orca-settings-cat:checked {{ background: alpha(@orca_accent, 0.18); color: @orca_text; }}\n\
+         .orca-toolbar {{ background: alpha(@orca_surface, {chrome_bg}); }}\n\
          .orca-toolbar separator {{ background: alpha(@orca_text, 0.08); }}\n\
-         .orca-statusbar {{ background: alpha(@orca_surface, 0.50); border-top: 1px solid alpha(@orca_text, 0.06); }}\n\
+         .orca-toolbar button:hover {{ background: alpha(@orca_text, 0.08); }}\n\
+         .orca-navbar {{ background: alpha(@orca_surface, {chrome_bg}); border-bottom: 1px solid alpha(@orca_text, 0.08); }}\n\
+         .orca-crumb {{ color: alpha(@orca_text, 0.72); }}\n\
+         .orca-crumb:hover {{ background: alpha(@orca_text, 0.08); color: @orca_text; }}\n\
+         .orca-crumb-current {{ color: @orca_accent; font-weight: 600; }}\n\
+         .orca-notebook > header.top {{ background: alpha(@orca_surface, {chrome_bg}); border-bottom: 1px solid alpha(@orca_text, 0.08); }}\n\
+         .orca-notebook > header.top tab {{ background: transparent; color: alpha(@orca_text, 0.65); border: none; box-shadow: none; }}\n\
+         .orca-notebook > header.top tab:hover {{ background: alpha(@orca_text, 0.06); color: @orca_text; }}\n\
+         .orca-notebook > header.top tab:checked {{ background: alpha(@orca_text, 0.08); color: @orca_text; box-shadow: inset 0 -2px @orca_accent; }}\n\
+         window.orca-root popover.background {{ background: alpha(@orca_surface, {popover_bg}); color: @orca_text; }}\n\
+         .orca-statusbar {{ background: alpha(@orca_surface, {statusbar_bg}); border-top: 1px solid alpha(@orca_text, 0.06); }}\n\
          .orca-statusbar label {{ opacity: 0.85; }}\n\
-         window.orca-root columnview, window.orca-root gridview, window.orca-root listview {{ background: alpha(@orca_bg, 0.82); color: @orca_text; }}\n\
+         window.orca-root columnview, window.orca-root gridview, window.orca-root listview {{ background: alpha(@orca_bg, {list_bg}); color: @orca_text; }}\n\
          window.orca-root columnview > header button {{ background: alpha(@orca_surface, 0.60); }}\n\
          window.orca-root row:selected, window.orca-root :selected {{ background: alpha(@orca_accent, 0.30); color: @orca_text; }}\n\
          .orca-home-title {{ color: @orca_text; }}\n\
@@ -255,7 +305,9 @@ fn generate_css(s: &Scheme, accent: &str, image: Option<&Path>, dim: f64, font: 
          .orca-card-icon {{ color: @orca_accent; }}\n\
          .orca-drive-bar trough {{ background: alpha(@orca_text, 0.10); }}\n\
          .orca-drive-bar progress {{ background: linear-gradient(90deg, @orca_accent, lighter(@orca_accent)); }}\n\
-         .orca-note {{ color: @orca_subtext; }}\n",
+         .orca-note {{ color: @orca_subtext; }}\n\
+         .orca-quicklook-scrim {{ background: alpha(black, 0.55); }}\n\
+         .orca-quicklook-card {{ background: @orca_surface; color: @orca_text; box-shadow: 0 8px 32px alpha(black, 0.35); }}\n",
         bg = s.bg,
         surface = s.surface,
         text = s.text,
@@ -309,7 +361,7 @@ mod tests {
 
     #[test]
     fn generated_css_uses_accent_override() {
-        let css = generate_css(&SCHEMES[0], "#ff0000", None, 0.4, "JetBrains Mono 11");
+        let css = generate_css(&SCHEMES[0], "#ff0000", None, 0.4, 1.0, "JetBrains Mono 11");
         assert!(css.contains("@define-color orca_accent #ff0000;"));
         assert!(css.contains("window.orca-root"));
         assert!(css.contains("font-family: \"JetBrains Mono\";"));
@@ -323,9 +375,21 @@ mod tests {
             "#ff0000",
             Some(Path::new("/tmp/x.jpg")),
             0.5,
+            1.0,
             "",
         );
         assert!(css.contains("background-image:"));
         assert!(css.contains("x.jpg"));
+    }
+
+    #[test]
+    fn panel_opacity_scales_chrome_alpha_not_interaction_colors() {
+        let full = generate_css(&SCHEMES[0], "#ff0000", None, 0.4, 1.0, "");
+        let half = generate_css(&SCHEMES[0], "#ff0000", None, 0.4, 0.5, "");
+        assert!(full.contains("alpha(@orca_surface, 0.72)"));
+        assert!(half.contains("alpha(@orca_surface, 0.36)"));
+        // Hover/selection feedback must not move with the opacity slider.
+        assert!(full.contains("alpha(@orca_accent, 0.30)"));
+        assert!(half.contains("alpha(@orca_accent, 0.30)"));
     }
 }

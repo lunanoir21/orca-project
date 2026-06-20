@@ -60,9 +60,38 @@ Lua plugins run in a `mlua` Lua 5.4 environment with:
 - `io`, `os`, `package`, `debug` explicitly removed from globals.
 - `require` replaced with a function that always raises an error.
 - Per-hook execution timeout of 500 ms (enforced via Lua instruction-count hooks).
+- A 64 MiB Lua heap limit (`Lua::set_memory_limit`), so a runaway allocation loop is killed rather than exhausting host memory.
 - Plugins cannot import `orca-vault` internals — the only interface is the `orca.*` table.
 
 A plugin that panics, errors, or exceeds its timeout is caught, its error is logged, and it is moved to `PluginState::Error`. It cannot crash Orca.
+
+### `orca.exec` vs. `orca.exec_argv` / `orca.spawn_argv`
+
+`orca.exec(cmd)` runs `cmd` through `sh -c`. It exists for plugins that only
+ever pass fixed string literals (e.g. `orca.exec("git status --porcelain")`).
+Any plugin that interpolates a file path or other variable data into the
+command **must** use `orca.exec_argv(program, args)` or `orca.spawn_argv(program,
+args)` instead — both pass `args` straight to `execve` with no shell in
+between, so a path containing `;`, backticks, or spaces cannot inject a
+second command. The built-in `git-status.lua` and `archive.lua` plugins use
+`exec_argv` for exactly this reason.
+
+### `secure-open.lua` and bubblewrap
+
+The built-in `secure-open.lua` plugin adds a "Secure Open" context-menu item
+that runs the selected file's default opener inside a [bubblewrap](https://github.com/containers/bubblewrap)
+sandbox: read-only root filesystem, an empty `/home`, the target file
+re-exposed read-only, and `--unshare-all` (no network, separate PID/IPC/UTS
+namespaces). This is **namespace-based isolation, not a hardened security
+boundary**: it stops the opened app from reading or writing other files and
+from establishing a routed network connection, but it does not add seccomp
+filtering and cannot stop every local side channel (for example, a host
+service reachable over a Unix socket under `/run` is still reachable, since
+isolating that would break normal desktop integration like the Wayland
+socket the opened app needs to draw a window). Treat it as a strong
+reduction in blast radius for an untrusted file, not a guarantee. It requires
+`bubblewrap` (`bwrap`) to be installed; if it isn't, the plugin notifies once
+and does nothing rather than silently opening the file unsandboxed.
 
 ---
 

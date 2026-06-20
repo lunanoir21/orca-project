@@ -162,11 +162,18 @@ impl NavBar {
         while let Some(child) = self.crumbs.first_child() {
             self.crumbs.remove(&child);
         }
-        for (label, target) in crumb_segments(&self.path) {
+        let segments = crumb_segments(&self.path);
+        let last_idx = segments.len().saturating_sub(1);
+        for (idx, (label, target)) in segments.into_iter().enumerate() {
+            let css = if idx == last_idx {
+                ["orca-crumb", "orca-crumb-current"].as_slice()
+            } else {
+                ["orca-crumb"].as_slice()
+            };
             let button = gtk::Button::builder()
                 .label(&label)
                 .has_frame(false)
-                .css_classes(["orca-crumb"])
+                .css_classes(css)
                 .build();
             let sender = sender.clone();
             button.connect_clicked(move |_| {

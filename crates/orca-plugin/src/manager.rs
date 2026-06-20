@@ -274,6 +274,30 @@ mod tests {
     }
 
     #[test]
+    fn builtin_plugins_load_without_error() {
+        // Load the real shipped plugins (not synthetic test strings) to catch
+        // Lua syntax/registration errors in plugins/*.lua before they'd ship.
+        let builtin_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+        let mut mgr = PluginManager::new();
+        mgr.discover_and_load(Path::new("/nonexistent"), &builtin_dir);
+
+        let loaded: Vec<&str> = mgr.plugins.iter().map(|p| p.meta.id.as_str()).collect();
+        assert!(loaded.contains(&"git-status"), "loaded: {loaded:?}");
+        assert!(loaded.contains(&"archive"), "loaded: {loaded:?}");
+        assert!(loaded.contains(&"secure-open"), "loaded: {loaded:?}");
+
+        for p in &mgr.plugins {
+            assert_eq!(
+                p.plugin_state,
+                PluginState::Enabled,
+                "{} failed to load: {:?}",
+                p.meta.id,
+                p.state.borrow().log
+            );
+        }
+    }
+
+    #[test]
     fn enable_disable_roundtrip() {
         let dir = tempdir().unwrap();
         write_plugin(

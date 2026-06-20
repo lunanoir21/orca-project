@@ -14,6 +14,7 @@ use orca_vault::VaultConfig;
 
 use crate::i18n::Lang;
 use crate::pane::ViewMode;
+use crate::toolbar::{self, ToolbarItem};
 use crate::xdg::XdgPaths;
 
 /// The full user configuration.
@@ -32,6 +33,24 @@ pub struct Config {
     pub bookmarks: Vec<PathBuf>,
     /// Configured vaults, each with path and auto-lock settings.
     pub vaults: Vec<VaultConfig>,
+    /// Toolbar layout (which items, in what order).
+    pub toolbar: ToolbarConfig,
+}
+
+/// `[toolbar]` — the customizable toolbar layout.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToolbarConfig {
+    /// Items shown in the toolbar, in display order.
+    pub items: Vec<ToolbarItem>,
+}
+
+impl Default for ToolbarConfig {
+    fn default() -> Self {
+        Self {
+            items: toolbar::default_items(),
+        }
+    }
 }
 
 /// `[keybinds]` — keyboard shortcut strings (format: `"Ctrl+T"`, `"F3"`).
@@ -74,6 +93,8 @@ pub struct Keybinds {
     pub view_detail: String,
     /// Add selected files to vault.
     pub vault_add: String,
+    /// Show the Quick Look fullscreen preview overlay for the selected file.
+    pub quick_look: String,
 }
 
 impl Default for Keybinds {
@@ -97,6 +118,7 @@ impl Default for Keybinds {
             view_icon: "Ctrl+2".to_owned(),
             view_detail: "Ctrl+3".to_owned(),
             vault_add: "Ctrl+Shift+V".to_owned(),
+            quick_look: "Space".to_owned(),
         }
     }
 }
@@ -153,6 +175,12 @@ pub struct General {
     pub confirm_delete: bool,
     /// Default view mode for new tabs (`"list"`, `"icon"`, `"detail"`).
     pub default_view: String,
+    /// Show the toolbar row.
+    pub toolbar_visible: bool,
+    /// Show the breadcrumb/path bar.
+    pub breadcrumb_visible: bool,
+    /// Page shown on launch (`"files"` or `"home"`).
+    pub start_page: String,
 }
 
 impl Default for General {
@@ -163,6 +191,9 @@ impl Default for General {
             single_click_open: false,
             confirm_delete: true,
             default_view: "list".to_owned(),
+            toolbar_visible: true,
+            breadcrumb_visible: true,
+            start_page: "files".to_owned(),
         }
     }
 }
@@ -185,6 +216,10 @@ pub struct Appearance {
     pub background_image: Option<PathBuf>,
     /// Darkening applied over the background image, 0.0 (none) – 1.0 (black).
     pub background_dim: f64,
+    /// Multiplier applied to every panel/chrome background alpha (sidebar,
+    /// toolbar, preview, status bar, ...), 0.3 (very see-through) – 1.0 (as
+    /// designed). See [`crate::theme::apply`].
+    pub panel_opacity: f64,
 }
 
 impl Default for Appearance {
@@ -196,6 +231,7 @@ impl Default for Appearance {
             icon_size: 32,
             background_image: None,
             background_dim: 0.45,
+            panel_opacity: 1.0,
         }
     }
 }
@@ -260,6 +296,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shipped_default_toml_matches_schema() {
+        // config/default.toml is documentation, not something Orca reads at
+        // runtime (see the module doc comment) — but it drifts silently if
+        // nobody checks it against the real `Config` shape. Parse the real
+        // shipped file here so a renamed/removed field fails CI instead of
+        // just misleading whoever reads the file next.
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/default.toml");
+        let text = std::fs::read_to_string(&path).expect("read config/default.toml");
+        let cfg: Config = toml::from_str(&text).expect("config/default.toml must parse as Config");
+        assert_eq!(cfg.appearance.scheme, "graphite");
+        assert_eq!(cfg.keybinds.quick_look, "Space");
+    }
+
+    #[test]
     fn defaults_are_turkish_list() {
         let cfg = Config::default();
         assert_eq!(cfg.language(), Lang::Turkish);
@@ -274,6 +324,36 @@ mod tests {
         // Unspecified appearance falls back to the default dim.
         assert!((cfg.appearance.background_dim - 0.45).abs() < f64::EPSILON);
         assert!(cfg.general.confirm_delete);
+        // Unspecified toolbar falls back to the shipped default layout.
+        assert_eq!(cfg.toolbar.items, toolbar::default_items());
+        assert!(cfg.general.toolbar_visible);
+        assert!(cfg.general.breadcrumb_visible);
+    }
+
+    #[test]
+    fn toolbar_items_roundtrip_through_config() {
+        let mut cfg = Config::default();
+        cfg.toolbar.items = vec![ToolbarItem::Back, ToolbarItem::Search];
+        cfg.general.toolbar_visible = false;
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        let back: Config = toml::from_str(&text).unwrap();
+        assert_eq!(
+            back.toolbar.items,
+            vec![ToolbarItem::Back, ToolbarItem::Search]
+        );
+        assert!(!back.general.toolbar_visible);
+    }
+
+    #[test]
+    fn start_page_defaults_to_files_and_roundtrips() {
+        let cfg = Config::default();
+        assert_eq!(cfg.general.start_page, "files");
+
+        let mut cfg = Config::default();
+        cfg.general.start_page = "home".to_owned();
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        let back: Config = toml::from_str(&text).unwrap();
+        assert_eq!(back.general.start_page, "home");
     }
 
     #[test]

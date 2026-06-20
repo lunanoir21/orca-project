@@ -108,6 +108,7 @@ impl Component for TabbedPane {
         gtk::Notebook {
             set_scrollable: true,
             set_show_border: false,
+            add_css_class: "orca-notebook",
             connect_switch_page[sender] => move |_, _, page| {
                 sender.input(SideInput::Switched(page));
             },

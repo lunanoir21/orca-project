@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 
+use orca_core::filesystem_usage;
 use relm4::gtk;
 use relm4::gtk::prelude::*;
 use relm4::ComponentSender;
@@ -143,7 +144,7 @@ pub fn populate(panel: &gtk::Box, sender: &ComponentSender<AppModel>, bookmarks:
 
     panel.append(&section_label(&i18n::t("home.drives")));
     for (name, path) in mounted_drives() {
-        panel.append(&nav_row("drive-harddisk-symbolic", &name, path, sender));
+        panel.append(&drive_nav_row(&name, path, sender));
     }
 
     // Network locations section: button that opens the network browser dialog.
@@ -224,6 +225,57 @@ fn nav_row(
     sender: &ComponentSender<AppModel>,
 ) -> gtk::Button {
     let button = row_button(icon, label);
+    let sender = sender.clone();
+    button.connect_clicked(move |_| sender.input(AppMsg::NavigateTo(path.clone())));
+    button
+}
+
+/// A sidebar row for a drive: icon+name on top, a thin capacity bar below.
+fn drive_nav_row(name: &str, path: PathBuf, sender: &ComponentSender<AppModel>) -> gtk::Button {
+    let outer = gtk::Box::builder()
+        .orientation(gtk::Orientation::Vertical)
+        .spacing(2)
+        .build();
+
+    let top = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(10)
+        .build();
+    top.append(
+        &gtk::Image::builder()
+            .icon_name("drive-harddisk-symbolic")
+            .pixel_size(18)
+            .build(),
+    );
+    top.append(
+        &gtk::Label::builder()
+            .label(name)
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build(),
+    );
+    outer.append(&top);
+
+    if let Ok(usage) = filesystem_usage(&path) {
+        let fraction = if usage.total > 0 {
+            usage.used as f64 / usage.total as f64
+        } else {
+            0.0
+        };
+        outer.append(
+            &gtk::ProgressBar::builder()
+                .fraction(fraction)
+                .css_classes(["orca-drive-bar"])
+                .build(),
+        );
+    }
+
+    let button = gtk::Button::builder()
+        .child(&outer)
+        .has_frame(false)
+        .css_classes(["orca-place"])
+        .build();
     let sender = sender.clone();
     button.connect_clicked(move |_| sender.input(AppMsg::NavigateTo(path.clone())));
     button

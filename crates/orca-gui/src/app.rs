@@ -30,12 +30,13 @@ use crate::format;
 use crate::home::{HomeInput, HomeOutput, HomePage};
 use crate::i18n::{self, Lang};
 use crate::keybind::{Action, ActionMap};
-use crate::mount_manager::MountManager;
+use crate::mount_manager::{MountManager, MountManagerInput};
 use crate::nav::{NavBar, NavInput, NavOutput};
 use crate::network::NetworkBrowser;
 use crate::pane::{PaneInput, PaneOutput, ViewMode};
 use crate::permissions::{PermissionsDialog, PermissionsInit};
 use crate::places;
+use crate::plugin_manager_ui::PluginManagerOutput;
 use crate::preview::{PreviewInput, PreviewPanel};
 use crate::properties::Properties;
 use crate::settings::{SettingsInit, SettingsOutput, SettingsPage};
@@ -153,6 +154,8 @@ pub struct AppModel {
     current_path: String,
     /// Handles to stateful toolbar buttons (history sensitivity, view toggles).
     toolbar: ToolbarHandles,
+    /// The toolbar row container (cleared/repopulated when the layout changes).
+    toolbar_row: gtk::Box,
     /// The currently-open properties dialog, kept alive while shown.
     properties: Option<Controller<Properties>>,
     /// The currently-open bulk rename dialog, kept alive while shown.
@@ -161,14 +164,20 @@ pub struct AppModel {
     permissions: Option<Controller<PermissionsDialog>>,
     /// The currently-open archive browser window, kept alive while shown.
     archive_view: Option<Controller<ArchiveView>>,
-    /// The currently-open mount manager dialog, kept alive while shown.
-    mount_manager: Option<Controller<MountManager>>,
+    /// The mount manager popover — built once and toggled open/closed (it is
+    /// a popover anchored to its toolbar button, not a separate window).
+    mount_manager: Controller<MountManager>,
     /// The currently-open disk usage dialog, kept alive while shown.
     disk_usage: Option<Controller<DiskUsageDialog>>,
     /// The currently-open network browser dialog, kept alive while shown.
     network_browser: Option<Controller<NetworkBrowser>>,
     /// The currently-open plugin manager dialog, kept alive while shown.
     plugin_manager_ui: Option<Controller<crate::plugin_manager_ui::PluginManagerDialog>>,
+    /// The currently-open Quick Look overlay, kept alive while shown.
+    quick_look: Option<Controller<crate::quicklook::QuickLookOverlay>>,
+    /// The active pane's current single selection, tracked for Quick Look
+    /// (the global keybind has no other way to reach "the selected file").
+    last_selected: Option<FileEntry>,
     /// Active scroll-sync binding between the two panes, when enabled.
     sync_binding: Option<gtk::glib::Binding>,
     /// Parsed keybind → action lookup table (shared with the key handler closure).
@@ -239,6 +248,8 @@ pub enum AppMsg {
     SetAccent(String),
     /// Change the background scrim strength; persisted and applied live.
     SetDim(f64),
+    /// Change the panel/chrome background opacity multiplier; persisted and applied live.
+    SetPanelOpacity(f64),
     /// Change the UI / list font; persisted and applied live.
     SetFont(String),
     /// Toggle hidden-file visibility; persisted and applied to both panes.
@@ -249,6 +260,8 @@ pub enum AppMsg {
     SetConfirmDelete(bool),
     /// Change the default view for new panes; persisted (applies to new panes).
     SetDefaultView(String),
+    /// Change the page shown on launch; persisted (applies next launch).
+    SetStartPage(String),
     /// Change the interface language; persisted to config (applies next launch).
     SetLanguage(Lang),
     /// A pane changed directory.
@@ -330,6 +343,19 @@ pub enum AppMsg {
     },
     /// Open the plugin manager dialog.
     OpenPluginManager,
+    /// User flipped a plugin's enable switch in the plugin manager dialog.
+    TogglePlugin(String, bool),
+    /// User pressed reload on a plugin row in the plugin manager dialog.
+    ReloadPlugin(String),
+    /// Show the Quick Look fullscreen preview overlay for the currently
+    /// selected file (no-op if nothing is selected).
+    ShowQuickLook,
+    /// Replace the toolbar layout from the settings customizer.
+    SetToolbarItems(Vec<crate::toolbar::ToolbarItem>),
+    /// Toggle the toolbar row.
+    SetToolbarVisible(bool),
+    /// Toggle the breadcrumb/path bar.
+    SetBreadcrumbVisible(bool),
 }
 
 #[relm4::component(pub)]
@@ -371,13 +397,13 @@ impl Component for AppModel {
                     #[local_ref]
                     toolbar_row -> gtk::Box {
                         #[watch]
-                        set_visible: model.page == AppPage::Files,
+                        set_visible: model.page == AppPage::Files && model.config.general.toolbar_visible,
                     },
 
                     #[local_ref]
                     nav_widget -> gtk::Stack {
                         #[watch]
-                        set_visible: model.page == AppPage::Files,
+                        set_visible: model.page == AppPage::Files && model.config.general.breadcrumb_visible,
                     },
 
                     // --- Content stack: home page or dual-pane browser ---
@@ -449,6 +475,7 @@ impl Component for AppModel {
             Some(&config.appearance.accent),
             config.background(),
             config.appearance.background_dim,
+            config.appearance.panel_opacity,
             &config.appearance.font,
         );
 
@@ -476,6 +503,9 @@ impl Component for AppModel {
             .forward(sender.input_sender(), |out| match out {
                 HomeOutput::Navigate(p) => AppMsg::NavigateTo(p),
                 HomeOutput::OpenSettings => AppMsg::ShowSettings,
+                HomeOutput::NewFolder => AppMsg::NewFolder,
+                HomeOutput::NewFile => AppMsg::NewFile,
+                HomeOutput::ConnectServer => AppMsg::OpenNetworkBrowser,
             });
 
         let settings = SettingsPage::builder()
@@ -483,6 +513,7 @@ impl Component for AppModel {
                 scheme: config.appearance.scheme.clone(),
                 accent: config.appearance.accent.clone(),
                 dim: config.appearance.background_dim,
+                panel_opacity: config.appearance.panel_opacity,
                 font: config.appearance.font.clone(),
                 show_hidden: config.general.show_hidden,
                 single_click: config.general.single_click_open,
@@ -492,21 +523,30 @@ impl Component for AppModel {
                 keybinds: config.keybinds.clone(),
                 terminal_shell: config.terminal.shell.clone(),
                 terminal_font: config.terminal.font.clone(),
+                start_page: config.general.start_page.clone(),
+                toolbar_items: config.toolbar.items.clone(),
+                toolbar_visible: config.general.toolbar_visible,
+                breadcrumb_visible: config.general.breadcrumb_visible,
             })
             .forward(sender.input_sender(), |out| match out {
                 SettingsOutput::SetScheme(s) => AppMsg::SetScheme(s),
                 SettingsOutput::SetAccent(a) => AppMsg::SetAccent(a),
                 SettingsOutput::SetBackground(b) => AppMsg::SetBackground(b),
                 SettingsOutput::SetDim(d) => AppMsg::SetDim(d),
+                SettingsOutput::SetPanelOpacity(o) => AppMsg::SetPanelOpacity(o),
                 SettingsOutput::SetFont(f) => AppMsg::SetFont(f),
                 SettingsOutput::SetShowHidden(v) => AppMsg::SetShowHidden(v),
                 SettingsOutput::SetSingleClick(v) => AppMsg::SetSingleClick(v),
                 SettingsOutput::SetConfirmDelete(v) => AppMsg::SetConfirmDelete(v),
                 SettingsOutput::SetDefaultView(v) => AppMsg::SetDefaultView(v),
+                SettingsOutput::SetStartPage(v) => AppMsg::SetStartPage(v),
                 SettingsOutput::SetLanguage(l) => AppMsg::SetLanguage(l),
                 SettingsOutput::SetKeybind(k, b) => AppMsg::SetKeybind(k, b),
                 SettingsOutput::SetTerminalShell(s) => AppMsg::SetTerminalShell(s),
                 SettingsOutput::SetTerminalFont(f) => AppMsg::SetTerminalFont(f),
+                SettingsOutput::SetToolbarItems(items) => AppMsg::SetToolbarItems(items),
+                SettingsOutput::SetToolbarVisible(v) => AppMsg::SetToolbarVisible(v),
+                SettingsOutput::SetBreadcrumbVisible(v) => AppMsg::SetBreadcrumbVisible(v),
                 SettingsOutput::ResetDefaults => AppMsg::ResetDefaults,
             });
 
@@ -523,9 +563,10 @@ impl Component for AppModel {
         files_box.append(preview.widget());
 
         // Build the content stack imperatively (the view! macro is awkward with
-        // `GtkStack` named children). No transition: page switches are instant.
+        // `GtkStack` named children).
         let content_stack = gtk::Stack::new();
-        content_stack.set_transition_type(gtk::StackTransitionType::None);
+        content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+        content_stack.set_transition_duration(180);
         content_stack.add_named(home.widget(), Some(AppPage::Home.name()));
         content_stack.add_named(&files_box, Some(AppPage::Files.name()));
         content_stack.add_named(settings.widget(), Some(AppPage::Settings.name()));
@@ -558,8 +599,17 @@ impl Component for AppModel {
             });
         }
 
-        let (toolbar_row, toolbar) =
-            toolbar::build(&toolbar::default_items(), sender.input_sender());
+        let (toolbar_row, toolbar) = toolbar::build(&config.toolbar.items, sender.input_sender());
+
+        // Mount manager: a popover (not a window) anchored to its toolbar
+        // button, built once and toggled open/closed for the lifetime of the app.
+        let mount_manager = MountManager::builder().launch(()).detach();
+        if let Some(btn) = &toolbar.mount_btn {
+            mount_manager.widget().set_parent(btn);
+        }
+        relm4::spawn(crate::mount_manager::start_event_listener(
+            mount_manager.sender().clone(),
+        ));
 
         // Build the vault manager from configured vaults.
         let vault_mgr = Arc::new(Mutex::new(
@@ -596,6 +646,12 @@ impl Component for AppModel {
         plugin_mgr.discover_and_load(&paths.plugins, &builtin_plugins);
         tracing::info!(count = plugin_mgr.list().len(), "plugins loaded");
 
+        let start_page = if config.general.start_page == "home" {
+            AppPage::Home
+        } else {
+            AppPage::Files
+        };
+
         let model = AppModel {
             paths,
             config,
@@ -610,7 +666,7 @@ impl Component for AppModel {
             preview_visible: false,
             terminal,
             terminal_visible: false,
-            page: AppPage::Home,
+            page: start_page,
             active: 0,
             dual: false,
             state,
@@ -619,14 +675,17 @@ impl Component for AppModel {
             status: i18n::tf("status.items", &[("n", "0")]),
             current_path: start_dir.to_string_lossy().into_owned(),
             toolbar,
+            toolbar_row: toolbar_row.clone(),
             properties: None,
             bulk_rename: None,
             permissions: None,
             archive_view: None,
-            mount_manager: None,
+            mount_manager,
             disk_usage: None,
             network_browser: None,
             plugin_manager_ui: None,
+            quick_look: None,
+            last_selected: None,
             sync_binding: None,
             action_map,
             plugin_mgr,
@@ -698,6 +757,7 @@ impl Component for AppModel {
                     if let Some(e) = &entry {
                         self.plugin_mgr.fire_file_select(&e.path);
                     }
+                    self.last_selected = entry.clone();
                     self.preview.emit(PreviewInput::Show(entry));
                 }
             }
@@ -729,11 +789,16 @@ impl Component for AppModel {
             AppMsg::SetScheme(scheme) => self.set_scheme(scheme),
             AppMsg::SetAccent(accent) => self.set_accent(accent),
             AppMsg::SetDim(dim) => self.set_dim(dim),
+            AppMsg::SetPanelOpacity(opacity) => self.set_panel_opacity(opacity),
             AppMsg::SetFont(font) => self.set_font(font),
             AppMsg::SetShowHidden(v) => self.set_show_hidden(v),
             AppMsg::SetSingleClick(v) => self.set_single_click(v),
             AppMsg::SetConfirmDelete(v) => self.set_confirm_delete(v),
             AppMsg::SetDefaultView(v) => self.set_default_view(v),
+            AppMsg::SetStartPage(v) => {
+                self.config.general.start_page = v;
+                self.persist();
+            }
             AppMsg::SetLanguage(lang) => self.set_language(lang),
             AppMsg::DirChanged(idx, path) => {
                 self.state[idx].dir = path.clone();
@@ -794,7 +859,7 @@ impl Component for AppModel {
             AppMsg::OpenFile(path) => open_default(&path),
             AppMsg::ShowProperties(entry) => {
                 let controller = Properties::builder().launch(entry).detach();
-                controller.widget().present();
+                crate::anim::present_with_fade(controller.widget());
                 self.properties = Some(controller);
             }
             AppMsg::ShowPermissions(entry) => {
@@ -812,7 +877,7 @@ impl Component for AppModel {
                         gid,
                     })
                     .detach();
-                ctrl.widget().present();
+                crate::anim::present_with_fade(ctrl.widget());
                 self.permissions = Some(ctrl);
             }
             AppMsg::BulkRename(paths) => {
@@ -827,7 +892,7 @@ impl Component for AppModel {
                     .forward(sender_clone.input_sender(), move |out| match out {
                         BulkRenameOutput::Done => AppMsg::Reload,
                     });
-                ctrl.widget().present();
+                crate::anim::present_with_fade(ctrl.widget());
                 self.bulk_rename = Some(ctrl);
             }
             AppMsg::ExtractTo(paths) => {
@@ -861,7 +926,7 @@ impl Component for AppModel {
             }
             AppMsg::BrowseArchive(path) => {
                 let ctrl = ArchiveView::builder().launch(path).detach();
-                ctrl.widget().present();
+                crate::anim::present_with_fade(ctrl.widget());
                 self.archive_view = Some(ctrl);
             }
             AppMsg::OpenDiskUsage(path) => {
@@ -872,20 +937,21 @@ impl Component for AppModel {
                         DiskUsageOutput::Navigate(p) => AppMsg::NavigateTo(p),
                     },
                 );
-                ctrl.widget().present();
+                crate::anim::present_with_fade(ctrl.widget());
                 self.disk_usage = Some(ctrl);
             }
             AppMsg::OpenMountManager => {
-                let ctrl = MountManager::builder().launch(()).detach();
-                // Start background event listener so plug/unplug auto-refreshes.
-                let event_sender = ctrl.sender().clone();
-                relm4::spawn(crate::mount_manager::start_event_listener(event_sender));
-                ctrl.widget().present();
-                self.mount_manager = Some(ctrl);
+                let popover = self.mount_manager.widget();
+                if popover.is_visible() {
+                    popover.popdown();
+                } else {
+                    self.mount_manager.emit(MountManagerInput::Refresh);
+                    popover.popup();
+                }
             }
             AppMsg::OpenNetworkBrowser => {
                 let ctrl = NetworkBrowser::builder().launch(()).detach();
-                ctrl.widget().present();
+                crate::anim::present_with_fade(ctrl.widget());
                 self.network_browser = Some(ctrl);
             }
             AppMsg::AddToVault(paths) => {
@@ -969,15 +1035,76 @@ impl Component for AppModel {
             AppMsg::OpenPluginManager => {
                 let ctrl = crate::plugin_manager_ui::PluginManagerDialog::builder()
                     .launch(self.plugin_mgr.list())
-                    .detach();
-                ctrl.widget().present();
+                    .forward(sender.input_sender(), |out| match out {
+                        PluginManagerOutput::Toggle(id, on) => AppMsg::TogglePlugin(id, on),
+                        PluginManagerOutput::Reload(id) => AppMsg::ReloadPlugin(id),
+                    });
+                crate::anim::present_with_fade(ctrl.widget());
                 self.plugin_manager_ui = Some(ctrl);
+            }
+            AppMsg::TogglePlugin(id, on) => {
+                if on {
+                    self.plugin_mgr.enable(&id);
+                } else {
+                    self.plugin_mgr.disable(&id);
+                }
+                self.refresh_plugin_manager_ui();
+            }
+            AppMsg::ReloadPlugin(id) => {
+                self.plugin_mgr.reload(&id);
+                self.refresh_plugin_manager_ui();
+            }
+            AppMsg::ShowQuickLook => {
+                if let Some(entry) = self.last_selected.clone() {
+                    let ctrl = crate::quicklook::QuickLookOverlay::builder()
+                        .launch(entry)
+                        .detach();
+                    crate::anim::present_with_fade(ctrl.widget());
+                    self.quick_look = Some(ctrl);
+                }
+            }
+            AppMsg::SetToolbarItems(items) => {
+                self.config.toolbar.items = items;
+                self.toolbar = toolbar::populate(
+                    &self.toolbar_row,
+                    &self.config.toolbar.items,
+                    sender.input_sender(),
+                );
+                // The Mount Manager popover anchors to its toolbar button,
+                // which was just rebuilt — re-parent it (or drop it if the
+                // user removed that item from the toolbar).
+                let popover = self.mount_manager.widget();
+                popover.popdown();
+                popover.unparent();
+                if let Some(btn) = &self.toolbar.mount_btn {
+                    popover.set_parent(btn);
+                }
+                self.refresh_chrome();
+                self.persist();
+            }
+            AppMsg::SetToolbarVisible(v) => {
+                self.config.general.toolbar_visible = v;
+                self.persist();
+            }
+            AppMsg::SetBreadcrumbVisible(v) => {
+                self.config.general.breadcrumb_visible = v;
+                self.persist();
             }
         }
     }
 }
 
 impl AppModel {
+    /// Push a fresh plugin list snapshot into the open plugin manager dialog,
+    /// if one is open, so toggling/reloading a plugin is reflected immediately.
+    fn refresh_plugin_manager_ui(&self) {
+        if let Some(ctrl) = &self.plugin_manager_ui {
+            ctrl.emit(crate::plugin_manager_ui::PluginManagerInput::Refresh(
+                self.plugin_mgr.list(),
+            ));
+        }
+    }
+
     /// Push the current plugin badge map to both pane sides.
     fn push_plugin_badges(&self) {
         use crate::pane::PaneInput;
@@ -1035,6 +1162,7 @@ impl AppModel {
             Some(&self.config.appearance.accent),
             self.config.background(),
             self.config.appearance.background_dim,
+            self.config.appearance.panel_opacity,
             &self.config.appearance.font,
         );
     }
@@ -1075,6 +1203,13 @@ impl AppModel {
     /// Apply and persist a new background scrim strength.
     fn set_dim(&mut self, dim: f64) {
         self.config.appearance.background_dim = dim.clamp(0.0, 1.0);
+        self.apply_theme();
+        self.persist();
+    }
+
+    /// Apply and persist a new panel/chrome background opacity multiplier.
+    fn set_panel_opacity(&mut self, opacity: f64) {
+        self.config.appearance.panel_opacity = opacity.clamp(0.3, 1.0);
         self.apply_theme();
         self.persist();
     }
@@ -1141,6 +1276,7 @@ impl AppModel {
             "view_icon" => kb.view_icon = binding,
             "view_detail" => kb.view_detail = binding,
             "vault_add" => kb.vault_add = binding,
+            "quick_look" => kb.quick_look = binding,
             _ => {
                 tracing::warn!(key = %config_key, "set_keybind: unknown action key");
                 return;
@@ -1334,6 +1470,7 @@ fn action_to_msg(action: Action) -> Option<AppMsg> {
         Action::ViewIcon => AppMsg::SetViewMode(ViewMode::Icon),
         Action::ViewDetail => AppMsg::SetViewMode(ViewMode::Detail),
         Action::VaultAdd => return None, // requires active file selection
+        Action::QuickLook => AppMsg::ShowQuickLook,
     };
     Some(msg)
 }

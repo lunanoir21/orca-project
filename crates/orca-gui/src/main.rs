@@ -5,6 +5,7 @@
 //! The file browser (Phase 3.2), navigation (3.4) and the rest hang off that
 //! shell in later phases.
 
+mod anim;
 mod app;
 mod archive_view;
 mod bulk_rename;
@@ -24,6 +25,7 @@ mod places;
 mod plugin_manager_ui;
 mod preview;
 mod properties;
+mod quicklook;
 mod settings;
 mod side;
 mod terminal;

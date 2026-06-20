@@ -3,6 +3,13 @@
 
 # Home / start page
 "home.title"           = "Home"
+"home.welcome"         = "Welcome back, {user}"
+"home.welcome_fallback" = "Welcome back"
+"home.subtitle"        = "Your file manager"
+"home.quick_actions"   = "QUICK ACTIONS"
+"home.connect_server"  = "Connect to Server"
+"home.recent"          = "RECENT"
+"home.no_recent"       = "No recent items yet."
 "home.user_dirs"       = "USER DIRECTORIES"
 "home.drives"          = "DRIVES"
 "home.bookmarks"       = "BOOKMARKS"
@@ -18,6 +25,7 @@
 "home.lang_restart"    = "Language change applies after restart."
 "settings.title"       = "Settings"
 "settings.dim"         = "Background dim"
+"settings.panel_opacity" = "Panel transparency"
 
 # Behaviour settings
 "home.behaviour"     = "Behaviour"
@@ -25,6 +33,14 @@
 "set.single_click"   = "Open with single click"
 "set.confirm_delete" = "Confirm before moving to trash"
 "set.default_view"   = "Default view"
+"set.start_page"        = "Start page"
+"set.start_page_files"  = "Files"
+"set.start_page_home"   = "Home"
+"set.cat_appearance" = "Appearance"
+"set.cat_behaviour"  = "Behaviour"
+"set.cat_keybinds"   = "Shortcuts"
+"set.cat_terminal"   = "Terminal"
+"set.cat_toolbar"    = "Toolbar"
 "set.font"           = "Font"
 "set.view_list"      = "List"
 "set.view_icon"      = "Icon"
@@ -35,6 +51,9 @@
 "set.terminal"       = "Terminal"
 "set.terminal_shell" = "Shell"
 "set.terminal_font"  = "Terminal Font"
+"set.toolbar"         = "Toolbar"
+"set.show_toolbar"    = "Show toolbar"
+"set.show_breadcrumb" = "Show breadcrumb bar"
 "set.reset_defaults" = "Reset to Defaults"
 
 # User directory card labels
@@ -115,6 +134,11 @@
 "vault.pick_vault"         = "Choose Vault"
 "vault.integrity_title"    = "Integrity Report — {name}"
 "vault.passphrase"         = "Passphrase"
+"vault.passphrase_confirm" = "Passphrase (confirm)"
+"vault.passphrase_mismatch" = "Passphrases do not match"
+"vault.strength_weak"      = "Weak"
+"vault.strength_fair"      = "Fair"
+"vault.strength_strong"    = "Strong"
 
 # Sidebar rail
 "sidebar.home"      = "Home"
@@ -139,6 +163,7 @@
 "tb.sync"       = "Synchronized scrolling"
 "tb.terminal"   = "Terminal (F4)"
 "tb.mounts"     = "Mount Manager"
+"tb.separator"  = "Separator"
 
 # Right-click context menu
 "ctx.open"        = "Open"
@@ -204,6 +229,8 @@
 "perms.octal"        = "Octal"
 "perms.owner_group"  = "Owner / Group (UID:GID)"
 "perms.apply_owner"  = "Change Owner"
+"perms.invalid_owner" = "Owner and group must be numeric UID/GID."
+"perms.fail"          = "Failed to apply: {err}"
 
 # Archive operations
 "arc.progress" = "Processing archive…"
@@ -270,4 +297,5 @@
 
 # Generic
 "common.cancel" = "Cancel"
+"common.ok"     = "OK"
 "common.close"  = "Close"

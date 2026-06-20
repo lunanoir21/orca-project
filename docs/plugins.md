@@ -89,7 +89,15 @@ orca.set_badge(path, text, color)
 
 ```lua
 -- Run a shell command (max 5 s timeout). Returns stdout as a string.
+-- Only use this when every part of the command is a fixed literal — it runs
+-- through `sh -c`, so interpolating a file path or other variable data into
+-- the string is a shell-injection risk.
 local output = orca.exec("git status --porcelain")
+
+-- Run a program directly with an argv array — no shell involved, so this is
+-- the safe choice whenever any argument is a file path or other variable
+-- data (it can contain spaces, `;`, backticks, etc. with no special effect).
+local output = orca.exec_argv("git", {"-C", dir, "status", "--porcelain"})
 
 -- Show a desktop notification.
 orca.notify("Title", "Body text")

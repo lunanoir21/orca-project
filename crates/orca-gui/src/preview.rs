@@ -129,29 +129,41 @@ impl PreviewPanel {
     /// Render the preview for a concrete file entry.
     fn show_entry(&self, entry: &FileEntry) {
         self.clear();
-
-        let ext = entry.extension();
-        if ext.as_deref().is_some_and(|e| IMAGE_EXTS.contains(&e)) {
-            self.body.append(&image_view(&entry.path));
-        } else if let Some(text) = read_text(&entry.path) {
-            self.body.append(&text_view(&text));
-        } else if is_probably_binary(&entry.path) {
-            self.body.append(&note(&i18n::t("preview.binary")));
-        } else {
-            self.body.append(&icon_view(entry.kind));
-        }
-
-        self.body.append(&metadata(entry));
+        render_into(&self.body, entry, Some(240));
     }
 }
 
-/// A picture widget bounded to the panel, scaled to fit while keeping aspect.
-fn image_view(path: &Path) -> gtk::Picture {
+/// Render a preview of `entry` into `target` (appended, not cleared first):
+/// image/text/icon body, then the metadata grid. Shared by the side panel and
+/// [`crate::quicklook`]'s fullscreen overlay so the two stay in sync.
+///
+/// `image_height`: fixed picture height for the narrow side panel, or `None`
+/// to let the picture expand to fill the available space (Quick Look).
+pub(crate) fn render_into(target: &gtk::Box, entry: &FileEntry, image_height: Option<i32>) {
+    let ext = entry.extension();
+    if ext.as_deref().is_some_and(|e| IMAGE_EXTS.contains(&e)) {
+        target.append(&image_view(&entry.path, image_height));
+    } else if let Some(text) = read_text(&entry.path) {
+        target.append(&text_view(&text));
+    } else if is_probably_binary(&entry.path) {
+        target.append(&note(&i18n::t("preview.binary")));
+    } else {
+        target.append(&icon_view(entry.kind));
+    }
+    target.append(&metadata(entry));
+}
+
+/// A picture widget scaled to fit while keeping aspect. With a fixed height it
+/// matches the narrow side panel; with `None` it expands to fill its parent.
+fn image_view(path: &Path, height: Option<i32>) -> gtk::Picture {
     let picture = gtk::Picture::for_filename(path);
     picture.set_content_fit(gtk::ContentFit::Contain);
     picture.set_can_shrink(true);
-    picture.set_height_request(240);
     picture.set_hexpand(true);
+    match height {
+        Some(h) => picture.set_height_request(h),
+        None => picture.set_vexpand(true),
+    }
     picture
 }
 

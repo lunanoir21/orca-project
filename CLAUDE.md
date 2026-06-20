@@ -129,6 +129,9 @@ orca.add_context_item("Label", function(files) end)
 
 -- Utilities
 orca.exec(cmd)                          -- run shell command, returns stdout
+orca.exec_argv(program, {args...})      -- run program directly (no shell — use this
+                                         -- whenever an arg isn't a fixed literal, e.g.
+                                         -- a file path, to avoid shell injection)
 orca.notify(title, body)               -- desktop notification
 orca.open(path)                         -- open with default app
 orca.log(msg)                           -- plugin log (not vault-visible)

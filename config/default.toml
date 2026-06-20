@@ -1,10 +1,14 @@
 # Orca default configuration.
 #
-# This file ships with Orca and provides the fallback value for every option.
-# User config lives at $XDG_CONFIG_HOME/orca/config.toml and overrides only the
-# keys it sets; anything omitted falls back to the values documented here.
+# This file documents the fallback value for every option in `Config`
+# (crates/orca-gui/src/config.rs) — it is not read by Orca itself at runtime
+# (the Rust `Default` impls are authoritative). User config lives at
+# $XDG_CONFIG_HOME/orca/config.toml and overrides only the keys it sets;
+# anything omitted falls back to the values documented here.
 
 [general]
+# Interface language: "tr" or "en".
+language = "tr"
 # Show dot-prefixed hidden files in listings.
 show_hidden = false
 # Open files/folders on a single click instead of double click.
@@ -13,18 +17,31 @@ single_click_open = false
 confirm_delete = true
 # Default view mode for new tabs: "list", "icon", or "detail".
 default_view = "list"
+# Show the toolbar row.
+toolbar_visible = true
+# Show the breadcrumb/path bar.
+breadcrumb_visible = true
+# Page shown on launch: "files" or "home".
+start_page = "files"
 
 [appearance]
-# Theme name; resolves to a CSS file in the themes directory.
-theme = "catppuccin-mocha"
+# Color scheme id — see crate::theme::SCHEMES for the full built-in list
+# (graphite, mocha, nord, midnight, forest, rose, latte, gruvbox, dracula,
+# high-contrast).
+scheme = "graphite"
+# Accent color override (hex "#rrggbb"); empty uses the scheme's own accent.
+accent = ""
 # UI / list font (Pango font description).
 font = "JetBrains Mono 11"
-# Icon size in pixels. Allowed: 16, 24, 32, 48, 64, 96, 128.
+# Icon size in pixels.
 icon_size = 32
-
-[preview]
-# Maximum file size (bytes) Orca will load into the preview panel. Default 10 MB.
-max_preview_bytes = 10485760
+# Background image path shown behind the whole window; unset disables it.
+# background_image = "/path/to/image.jpg"
+# Darkening over the background image, 0.0 (none) - 1.0 (black).
+background_dim = 0.45
+# Multiplier on every panel/chrome background alpha (sidebar, toolbar,
+# preview, status bar, ...), 0.3 (very see-through) - 1.0 (as designed).
+panel_opacity = 1.0
 
 [keybinds]
 new_tab       = "Ctrl+T"
@@ -45,11 +62,15 @@ view_list     = "Ctrl+1"
 view_icon     = "Ctrl+2"
 view_detail   = "Ctrl+3"
 vault_add     = "Ctrl+Shift+V"
+quick_look    = "Space"
 
 [terminal]
 # Shell launched in the embedded terminal. Empty string uses $SHELL.
 shell = ""
 font = "JetBrains Mono 11"
+
+# Bookmarks are user-defined; none ship by default.
+# bookmarks = ["/home/user/Projects"]
 
 # Vaults are user-defined; none ship by default. Example shape:
 # [[vaults]]
@@ -57,6 +78,10 @@ font = "JetBrains Mono 11"
 # path              = "~/.local/share/orca/vaults/personal"
 # auto_lock_minutes = 5
 
-[plugins]
-# Built-in plugins enabled by default.
-enabled = ["git-status", "archive"]
+# [toolbar] (which buttons appear, in what order) is a list of kebab-case
+# item ids and is easiest to manage from Settings → Toolbar rather than by
+# hand; see crate::toolbar::ToolbarItem / default_items() for the full set.
+
+# Built-in plugins (plugins/*.lua): git-status, archive, secure-open.
+# Dropped into $XDG_DATA_HOME/orca/plugins/ to add your own; see
+# docs/plugins.md for the API reference.

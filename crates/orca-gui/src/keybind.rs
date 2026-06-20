@@ -28,6 +28,7 @@ pub enum Action {
     ViewIcon,
     ViewDetail,
     VaultAdd,
+    QuickLook,
 }
 
 impl Action {
@@ -52,6 +53,7 @@ impl Action {
             Action::ViewIcon => "Icon View",
             Action::ViewDetail => "Detail View",
             Action::VaultAdd => "Add to Vault",
+            Action::QuickLook => "Quick Look",
         }
     }
 
@@ -76,6 +78,7 @@ impl Action {
             Action::ViewIcon => "view_icon",
             Action::ViewDetail => "view_detail",
             Action::VaultAdd => "vault_add",
+            Action::QuickLook => "quick_look",
         }
     }
 
@@ -99,6 +102,7 @@ impl Action {
         Action::ViewIcon,
         Action::ViewDetail,
         Action::VaultAdd,
+        Action::QuickLook,
     ];
 }
 
@@ -188,6 +192,7 @@ impl ActionMap {
             (&kb.view_icon, Action::ViewIcon),
             (&kb.view_detail, Action::ViewDetail),
             (&kb.vault_add, Action::VaultAdd),
+            (&kb.quick_look, Action::QuickLook),
         ];
 
         let mut forward: HashMap<Action, KeyCombo> = HashMap::new();
