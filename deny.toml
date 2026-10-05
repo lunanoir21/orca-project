@@ -1,6 +1,6 @@
 # cargo-deny policy for Orca. Run with `cargo deny check`.
 #
-# Enforces: GPL-compatible license policy, the RustSec advisory database, and a
+# Enforces: a license policy for dependencies, the RustSec advisory database, and a
 # ban list for crates we never want pulled in (e.g. unmaintained crypto).
 
 [advisories]
@@ -10,8 +10,8 @@ yanked = "deny"
 unmaintained = "workspace"
 
 [licenses]
-# Orca is GPL-3.0-only. Allow the permissive licenses GPL projects may include,
-# all of which are GPL-3.0 compatible.
+# Orca is MIT. The allow list below is the set of dependency licenses accepted as-is
+# (GPL-3.0 stays listed so existing dependencies keep passing; review it if that changes).
 allow = [
     "GPL-3.0",
     "MIT",
