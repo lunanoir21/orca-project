@@ -1,7 +1,7 @@
 # Orca
 
 [![CI](https://github.com/lunanoir21/orca/actions/workflows/ci.yml/badge.svg)](https://github.com/lunanoir21/orca/actions/workflows/ci.yml)
-[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](Cargo.toml)
 
 > A full-featured, security-focused Linux file manager written in Rust.
@@ -150,4 +150,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and code style.
 
 ## License
 
-GPL-3.0-only. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
