@@ -5,7 +5,7 @@ pkgrel=1
 pkgdesc="Full-featured, security-focused Linux file manager written in Rust"
 arch=('x86_64')
 url="https://github.com/lunanoir21/orca"
-license=('GPL-3.0-only')
+license=('MIT')
 depends=(
     'gtk4'
     'libssh2'
