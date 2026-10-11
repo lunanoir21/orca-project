@@ -1,5 +1,9 @@
 # Orca
 
+![built with Claude Code](https://img.shields.io/badge/built%20with-Claude%20Code-D97757)
+![AI-assisted](https://img.shields.io/badge/AI--assisted-yes-e6edf3)
+![directed by human](https://img.shields.io/badge/directed%20by-human-3d444d)
+
 [![CI](https://github.com/lunanoir21/orca/actions/workflows/ci.yml/badge.svg)](https://github.com/lunanoir21/orca/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](Cargo.toml)
@@ -15,6 +19,9 @@ visual customization, and a sandboxed Lua plugin API.
      this README doesn't show a stale or staged shot. -->
 
 ---
+
+> [!IMPORTANT]
+> **Built with AI.** This project was largely written with [Claude Code](https://claude.com/claude-code). The ideas, design decisions, testing and final review are mine.
 
 ## Features
 
